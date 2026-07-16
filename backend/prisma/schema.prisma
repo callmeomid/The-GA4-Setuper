@@ -1,0 +1,98 @@
+// SQLite for local dev/MVP: zero-ops, file-based, plenty fast for one marketer's
+// occasional funnel captures. No native enum support on this connector, so status
+// fields below are plain strings validated in application code (lib/schema.ts) —
+// that also keeps the schema portable when this datasource swaps to Postgres.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  // Personal ingestion token the Chrome extension sends as `Authorization: Bearer <apiKey>`.
+  // The extension can't do an OAuth redirect flow from a background fetch, so it
+  // authenticates with this instead of a browser session.
+  apiKey        String    @unique @default(cuid())
+  accounts      Account[]
+  sessions      Session[]
+  funnels       Funnel[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Funnel {
+  id        String       @id @default(cuid())
+  name      String
+  // "draft" | "approved"
+  status    String       @default("draft")
+  ownerId   String
+  owner     User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  steps     FunnelStep[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model FunnelStep {
+  id       String @id @default(cuid())
+  funnelId String
+  funnel   Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  order    Int
+  label    String
+
+  urlPattern String
+  // "click" | "pageview" | "formSubmit"
+  triggerType String
+  selector    String?
+  // JSON-encoded string[] — SQLite has no native array/list column type.
+  formFieldsJson String?
+
+  // Generation status stubs — always "pending" until the GTM/GA4/Stape
+  // generation logic exists. Kept as three separate columns (not one) because
+  // the dashboard needs to show progress per downstream system independently.
+  gtmStatus   String @default("pending")
+  ga4Status   String @default("pending")
+  stapeStatus String @default("pending")
+
+  @@index([funnelId, order])
+}

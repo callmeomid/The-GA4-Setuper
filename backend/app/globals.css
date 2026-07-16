@@ -1,0 +1,70 @@
+:root {
+  --bg: #0a0b0d;
+  --bg-raised: #0f1013;
+  --line-primary: #e8e9ea;
+  --line-secondary: #6b6e73;
+  --line-ghost: #2a2c30;
+  --accent: #39ff88;
+  --accent-dim: rgba(57, 255, 136, 0.12);
+  --amber: #ffb84d;
+  --danger: #ff5f5f;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--line-primary);
+  font-family: var(--sans);
+}
+
+a {
+  color: inherit;
+}
+
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(232, 233, 234, 0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  padding: 10px 16px;
+  border-radius: 2px;
+  border: 1px solid var(--line-ghost);
+  background: transparent;
+  color: var(--line-primary);
+  cursor: pointer;
+  transition: border-color 120ms linear, color 120ms linear, background 120ms linear;
+}
+
+.btn:hover {
+  border-color: var(--line-secondary);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
