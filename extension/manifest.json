@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Funnel Setuper — Recorder",
+  "version": "0.1.0",
+  "description": "Click through your site once. Get a clean, exportable funnel spec — no dev tools required.",
+  "permissions": ["storage", "scripting", "activeTab", "tabs", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Funnel Setuper"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["lib/selector.js", "lib/url-pattern.js", "content/content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

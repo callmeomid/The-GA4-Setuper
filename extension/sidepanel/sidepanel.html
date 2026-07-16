@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Funnel Setuper</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-top">
+          <span class="wordmark">FUNNEL SETUPER</span>
+          <span id="status-indicator" class="status status-idle">
+            <span class="status-dot"></span>
+            <span id="status-label">IDLE</span>
+          </span>
+        </div>
+        <input
+          id="funnel-name"
+          class="funnel-name-input"
+          type="text"
+          placeholder="Untitled funnel"
+          autocomplete="off"
+        />
+        <div id="recording-origin" class="recording-origin hidden"></div>
+      </header>
+
+      <section id="recorder-view" class="view">
+        <div class="record-controls">
+          <button id="record-toggle" class="btn btn-primary">Start Recording</button>
+          <p class="helper-text">Navigate your site normally — we'll catch every step.</p>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          No steps yet. Click <strong>Start Recording</strong>, then click through your funnel like a visitor would.
+        </div>
+
+        <ol id="step-list" class="step-list"></ol>
+
+        <div class="footer-actions">
+          <button id="reset-btn" class="btn btn-ghost">Reset</button>
+          <button id="finish-btn" class="btn btn-accent" disabled>Finish &amp; Export</button>
+        </div>
+      </section>
+
+      <section id="export-view" class="view hidden">
+        <div class="export-header">
+          <button id="back-to-editing" class="btn btn-ghost btn-small">&larr; Back to editing</button>
+        </div>
+
+        <label class="export-label">FUNNEL SPEC (JSON)</label>
+        <pre id="json-output" class="json-output"></pre>
+        <div class="export-actions">
+          <button id="copy-btn" class="btn btn-accent">Copy JSON</button>
+        </div>
+        <p class="schema-note">
+          <code>formFields</code> is an addition beyond the base schema — captured field
+          <em>names</em> only, never values.
+        </p>
+
+        <div class="send-block">
+          <label class="export-label">SEND TO BACKEND</label>
+          <div class="send-row">
+            <input id="backend-url" class="backend-url-input" type="url" placeholder="https://your-backend.example.com/funnels" />
+            <button id="send-btn" class="btn btn-primary btn-small">Send</button>
+          </div>
+          <div id="send-result" class="send-result"></div>
+        </div>
+      </section>
+    </div>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
