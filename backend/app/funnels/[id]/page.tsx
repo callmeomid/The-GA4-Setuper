@@ -37,14 +37,24 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
 
       <FlowDiagram steps={funnel.steps} approved={approved} />
 
-      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
+      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
         {approved ? (
           <>
             <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
-              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
+              GTM/Stape setups write live drafts or live config — GA4 conversion events and Stape's container are
+              live the moment they're created, only GTM stays draft-only until you publish it yourself.
             </span>
-            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
-              Set up in Google Tag Manager →
+            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              GTM →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/ga4-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              GA4 →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/stape-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              Stape →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/validate`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+              Validate →
             </Link>
           </>
         ) : (

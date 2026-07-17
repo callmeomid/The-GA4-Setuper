@@ -12,19 +12,21 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
+  id              String           @id @default(cuid())
+  name            String?
+  email           String?          @unique
+  emailVerified   DateTime?
+  image           String?
   // Personal ingestion token the Chrome extension sends as `Authorization: Bearer <apiKey>`.
   // The extension can't do an OAuth redirect flow from a background fetch, so it
   // authenticates with this instead of a browser session.
-  apiKey        String    @unique @default(cuid())
-  accounts      Account[]
-  sessions      Session[]
-  funnels       Funnel[]
-  gtmConnection GtmConnection?
+  apiKey          String           @unique @default(cuid())
+  accounts        Account[]
+  sessions        Session[]
+  funnels         Funnel[]
+  gtmConnection   GtmConnection?
+  ga4Connection   Ga4Connection?
+  stapeConnection StapeConnection?
 }
 
 // A *separate* OAuth grant from sign-in (see lib/gtm/oauth.ts) — requested only
@@ -44,6 +46,101 @@ model GtmConnection {
   gtmContainerPublicId String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+}
+
+// Separate OAuth grant from both sign-in and GTM (see lib/ga4/oauth.ts) — scoped
+// to analytics.edit + analytics.readonly (to create/list conversion events and
+// read realtime reports) plus bigquery.readonly (only used if the funnel's
+// validation method is "bigquery"; a no-op scope if that path is never used).
+model Ga4Connection {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken           String
+  accessToken            String?
+  accessTokenExpiresAt   DateTime?
+  ga4AccountId           String?
+  ga4PropertyId          String?
+  ga4PropertyDisplayName String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+// Stape auth is an API key, not OAuth — there's no redirect flow, just a key
+// pasted into Settings. The exact request shape lib/stape/api.ts sends against
+// this key is best-effort (see lib/stape/api.ts header comment); this table
+// just holds what the user gave us. Unlike GTM's single shared container
+// (picked once in Settings, reused by every funnel), a Stape container maps
+// to a domain — different funnels can span different domains — so the
+// selected/created container is tracked per-Funnel, not here.
+model StapeConnection {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Shared log table for GA4 + Stape API calls (GTM keeps its own GtmApiLog —
+// this one exists so a second and third integration don't each need a
+// hand-copied log table and log-viewer page; see lib/integration-log.ts).
+model IntegrationApiLog {
+  id             String   @id @default(cuid())
+  // "ga4" | "stape"
+  system         String
+  funnelId       String?
+  funnel         Funnel?  @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  userId         String?
+  method         String
+  endpoint       String
+  requestBody    String?
+  responseStatus Int?
+  responseBody   String?
+  durationMs     Int?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([funnelId, system, createdAt])
+}
+
+// One run = one click of "Fire test events" on the validation page. Kept
+// separate from ValidationStepResult so re-running validation doesn't lose
+// history of previous runs.
+model ValidationRun {
+  id        String                 @id @default(cuid())
+  funnelId  String
+  funnel    Funnel                 @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  // "bigquery" | "realtime" | "debugview" — snapshot of funnel.validationMethod
+  // at the time this run was fired, so old runs stay self-describing even if
+  // the funnel's method setting changes later.
+  method    String
+  createdAt DateTime               @default(now())
+  results   ValidationStepResult[]
+
+  @@index([funnelId, createdAt])
+}
+
+model ValidationStepResult {
+  id                   String        @id @default(cuid())
+  runId                String
+  run                  ValidationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stepId               String
+  label                String
+  eventName            String
+  // Unique per-fire correlation tag sent as an event param, so a BigQuery
+  // check can match this exact test event rather than any event with that name.
+  validationId         String
+  // "pending" | "pass" | "fail" | "pending_manual" | "error"
+  outcome              String        @default("pending")
+  detail               String?
+  // JSON-encoded validationMessages[] from the MP debug endpoint (schema-level
+  // issues), independent of whether the event was later confirmed downstream.
+  mpValidationMessages String?
+  createdAt            DateTime      @default(now())
+  checkedAt            DateTime?
+
+  @@index([runId])
 }
 
 model Account {
@@ -99,17 +196,43 @@ model Funnel {
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
 
-  gtmApiLogs GtmApiLog[]
+  // "single" | "cross_subdomain" | "cross_domain" — asked on the Stape setup
+  // screen, since it changes the cookie/domain config materially (see
+  // lib/stape/resources.ts). Null until that screen has been visited once.
+  domainTopology       String?
+  // Root domain for cross-subdomain funnels, e.g. "example.com" (cookie gets
+  // scoped to ".example.com" so it's readable across subdomains).
+  rootDomain           String?
+  // JSON-encoded string[] of every distinct domain in the funnel, for
+  // cross-domain funnels — feeds GA4's cross-domain linker allowlist and
+  // Stape's per-domain first-party proxy config.
+  allowedDomainsJson   String?
+  // Set once we create (or reuse) this funnel's Stape server container —
+  // per-funnel, not per-connection, since different funnels can live on
+  // different domains (see StapeConnection's comment).
+  stapeContainerId     String?
+  stapeContainerDomain String?
+
+  // "bigquery" | "realtime" | "debugview" — chosen on the validation screen.
+  validationMethod  String?
+  bigQueryProjectId String?
+  // Defaults to `analytics_{propertyNumericId}` (GA4's standard export
+  // dataset name) if left blank — see lib/ga4/api.ts bigQueryDefaultDataset.
+  bigQueryDatasetId String?
+
+  gtmApiLogs         GtmApiLog[]
+  integrationApiLogs IntegrationApiLog[]
+  validationRuns     ValidationRun[]
 }
 
 // Persisted (not just console.log'd) so every GTM API call made on behalf of
 // this funnel stays inspectable after the fact for debugging.
 model GtmApiLog {
-  id       String  @id @default(cuid())
+  id             String   @id @default(cuid())
   // Nullable: some calls (listing accounts/containers while connecting GTM)
   // happen before a funnel is in scope. Push-execution calls always set this.
-  funnelId String?
-  funnel   Funnel? @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  funnelId       String?
+  funnel         Funnel?  @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   // Plain field, not a relation — this is transient debug data, not something
   // we need referential integrity on.
   userId         String?
@@ -132,10 +255,10 @@ model FunnelStep {
   order    Int
   label    String
 
-  urlPattern String
+  urlPattern     String
   // "click" | "pageview" | "formSubmit"
-  triggerType String
-  selector    String?
+  triggerType    String
+  selector       String?
   // JSON-encoded string[] — SQLite has no native array/list column type.
   formFieldsJson String?
 
