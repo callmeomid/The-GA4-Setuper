@@ -129,11 +129,27 @@ export function buildTagResource(
   };
 }
 
-export function buildGa4ConfigTagResource(tagName: string, measurementId: string, triggerId: string): tagmanager_v2.Schema$Tag {
+// serverContainerUrl, when provided, is the user's own Stape server container
+// hostname (see lib/gtm/preview.ts / Funnel.stapeSubdomain) — never a domain
+// we control. Parameter keys per Google's server-side tagging setup docs:
+// https://developers.google.com/tag-platform/learn/sst-fundamentals/5-sst-setup-analytics
+export function buildGa4ConfigTagResource(
+  tagName: string,
+  measurementId: string,
+  triggerId: string,
+  serverContainerUrl?: string | null,
+): tagmanager_v2.Schema$Tag {
+  const parameter: tagmanager_v2.Schema$Parameter[] = [{ type: 'template', key: 'measurementId', value: measurementId }];
+  if (serverContainerUrl) {
+    parameter.push(
+      { type: 'boolean', key: 'enableSendToServerContainer', value: 'true' },
+      { type: 'template', key: 'server_container_url', value: serverContainerUrl },
+    );
+  }
   return {
     name: tagName,
     type: 'gaawc',
-    parameter: [{ type: 'template', key: 'measurementId', value: measurementId }],
+    parameter,
     firingTriggerId: [triggerId],
   };
 }

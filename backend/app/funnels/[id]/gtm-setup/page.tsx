@@ -235,9 +235,18 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
             <p style={{ fontSize: 13, color: 'var(--accent)', margin: '0 0 8px' }}>
               ✓ Draft written to your workspace. Nothing has been published.
             </p>
-            <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              Open Google Tag Manager to review &amp; publish →
-            </a>
+            <p style={{ fontSize: 12.5, color: 'var(--line-secondary)', margin: '0 0 12px' }}>
+              This is the one moment you leave this app on purpose — GTM requires a human click to publish, and we
+              structurally can&rsquo;t do that step for you.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                Open Google Tag Manager to review &amp; publish →
+              </a>
+              <Link href={`/funnels/${params.id}/validate`} className="btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                I published it — validate now →
+              </Link>
+            </div>
           </div>
         </div>
       )}

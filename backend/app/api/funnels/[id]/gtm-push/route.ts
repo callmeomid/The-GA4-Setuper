@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { createTag, createTrigger } from '@/lib/gtm/api';
+import { resolveMeasurementId, stapeServerContainerUrl } from '@/lib/gtm/measurement';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
@@ -42,6 +43,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const ctx = { userId, funnelId: funnel.id };
     const { workspacePath, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection);
 
+    const measurementId = await resolveMeasurementId(userId, funnel.ga4MeasurementId);
+    const serverContainerUrl = stapeServerContainerUrl(funnel.stapeSubdomain);
+
     const plan = buildFunnelPlan(
       funnel.name,
       funnel.steps.map((s) => ({
@@ -56,7 +60,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ga4EventName: s.ga4EventName,
       })),
       snapshot,
-      funnel.ga4MeasurementId,
+      measurementId,
     );
 
     if (plan.blockedReason) {
@@ -77,7 +81,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ctx,
         connection.refreshToken,
         workspacePath,
-        buildGa4ConfigTagResource(ga4ConfigTagName, plan.ga4Config.measurementId!, allPagesTriggerId!),
+        buildGa4ConfigTagResource(ga4ConfigTagName, plan.ga4Config.measurementId!, allPagesTriggerId!, serverContainerUrl),
       );
       ga4ConfigTagName = configTag.name!;
     }

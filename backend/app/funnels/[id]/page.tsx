@@ -20,6 +20,7 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
   if (!funnel || funnel.ownerId !== userId) notFound();
 
   const approved = funnel.status === 'approved';
+  const validated = approved && funnel.steps.length > 0 && funnel.steps.every((s) => s.validatedAt);
 
   return (
     <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px' }}>
@@ -29,7 +30,17 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 16, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{funnel.name}</h1>
-        <StatusBadge status={funnel.status} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          {validated && (
+            <span
+              className="mono"
+              style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, border: '1px solid var(--accent)', color: 'var(--accent)' }}
+            >
+              Live
+            </span>
+          )}
+          <StatusBadge status={funnel.status} />
+        </div>
       </div>
       <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 4, marginBottom: 8, maxWidth: '58ch' }}>
         {funnel.steps.length} steps captured. This is the exact shape of what we&rsquo;ll build in GTM — one trigger
@@ -49,9 +60,15 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
             >
               View plain-English preview
             </Link>
-            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
-              Set up in Google Tag Manager →
-            </Link>
+            {validated ? (
+              <Link href={`/funnels/${funnel.id}/validate`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+                Re-check live status →
+              </Link>
+            ) : (
+              <Link href={`/funnels/${funnel.id}/connect/gtm`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+                Set up in Google Tag Manager →
+              </Link>
+            )}
           </>
         ) : (
           <ApproveButton funnelId={funnel.id} />

@@ -14,7 +14,7 @@ export default async function DashboardPage() {
   const funnels = await prisma.funnel.findMany({
     where: { ownerId: userId },
     orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { steps: true } } },
+    include: { _count: { select: { steps: true } }, steps: { select: { validatedAt: true } } },
   });
 
   return (
@@ -26,7 +26,14 @@ export default async function DashboardPage() {
         <SignOutButton />
       </div>
 
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Your funnels</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Your funnels</h1>
+        {funnels.length > 0 && (
+          <Link href="/onboarding/record" className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)', textDecoration: 'none' }}>
+            Record another funnel →
+          </Link>
+        )}
+      </div>
       <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 0, marginBottom: 24 }}>
         Captured from the Chrome extension. Review each one as a flow before approving it for setup.
       </p>
@@ -102,30 +109,43 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {funnels.map((funnel) => (
-            <li key={funnel.id}>
-              <Link
-                href={`/funnels/${funnel.id}`}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: '1px solid var(--line-ghost)',
-                  borderRadius: 2,
-                  padding: '14px 16px',
-                  textDecoration: 'none',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 14, marginBottom: 4 }}>{funnel.name}</div>
-                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--line-secondary)' }}>
-                    {funnel._count.steps} steps · {new Date(funnel.createdAt).toLocaleDateString()}
+          {funnels.map((funnel) => {
+            const validated = funnel.steps.length > 0 && funnel.steps.every((s) => s.validatedAt);
+            return (
+              <li key={funnel.id}>
+                <Link
+                  href={`/funnels/${funnel.id}`}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    border: '1px solid var(--line-ghost)',
+                    borderRadius: 2,
+                    padding: '14px 16px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 14, marginBottom: 4 }}>{funnel.name}</div>
+                    <div className="mono" style={{ fontSize: 10.5, color: 'var(--line-secondary)' }}>
+                      {funnel._count.steps} steps · {new Date(funnel.createdAt).toLocaleDateString()}
+                    </div>
                   </div>
-                </div>
-                <StatusBadge status={funnel.status} />
-              </Link>
-            </li>
-          ))}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {validated && (
+                      <span
+                        className="mono"
+                        style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, border: '1px solid var(--accent)', color: 'var(--accent)' }}
+                      >
+                        Live
+                      </span>
+                    )}
+                    <StatusBadge status={funnel.status} />
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

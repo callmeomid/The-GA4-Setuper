@@ -25,6 +25,7 @@ model User {
   sessions      Session[]
   funnels       Funnel[]
   gtmConnection GtmConnection?
+  ga4Connection Ga4Connection?
 }
 
 // A *separate* OAuth grant from sign-in (see lib/gtm/oauth.ts) — requested only
@@ -42,6 +43,27 @@ model GtmConnection {
   gtmAccountId         String?
   gtmContainerId       String?
   gtmContainerPublicId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+// A third, separate OAuth grant (see lib/ga4/oauth.ts) — scoped to
+// analytics.readonly only. This is what lets the validate step read GA4's
+// realtime report; it's unrelated to the measurement ID used by the GTM
+// config tag, which needs the internal numeric property id instead.
+model Ga4Connection {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken         String
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+  ga4PropertyId        String?   // resource name, e.g. "properties/123456"
+  ga4PropertyName      String?
+  // Default measurement id from the property's (first) web data stream —
+  // used as a fallback so a funnel doesn't need its own copy unless the
+  // user explicitly overrides it (see lib/gtm/measurement.ts).
+  ga4MeasurementId     String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 }
@@ -98,6 +120,11 @@ model Funnel {
   // Name of the GA4 Configuration tag every event tag references — either one
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
+  // Full hostname of the user's own Stape server container (e.g.
+  // "sgtm.yoursite.com"). We never call Stape's API — this is a manual,
+  // self-reported value that gets written into the GA4 Configuration tag's
+  // server_container_url parameter so events actually route through it.
+  stapeSubdomain   String?
 
   gtmApiLogs GtmApiLog[]
 }
@@ -153,6 +180,10 @@ model FunnelStep {
   // GA4 event name shown+editable in the preview UI before push; derived by
   // lib/gtm/event-name.ts but the user's edit always wins.
   ga4EventName String?
+  // Set once the realtime validate step actually sees this event arrive in
+  // GA4 — persisted so revisiting /validate doesn't lose already-confirmed
+  // steps.
+  validatedAt  DateTime?
 
   @@index([funnelId, order])
 }
