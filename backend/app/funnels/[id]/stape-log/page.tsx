@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { ApiLogList } from '@/components/ApiLogList';
 
-export default async function GtmLogPage({ params }: { params: { id: string } }) {
+export default async function StapeLogPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/signin');
   const userId = (session.user as { id: string }).id;
@@ -14,7 +14,7 @@ export default async function GtmLogPage({ params }: { params: { id: string } })
   if (!funnel || funnel.ownerId !== userId) notFound();
 
   const logs = await prisma.apiLog.findMany({
-    where: { funnelId: params.id, system: 'gtm' },
+    where: { funnelId: params.id, system: 'stape' },
     orderBy: { createdAt: 'desc' },
     take: 200,
   });
@@ -24,10 +24,10 @@ export default async function GtmLogPage({ params }: { params: { id: string } })
       <Link href={`/funnels/${params.id}`} className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)', textDecoration: 'none' }}>
         &larr; Back to funnel
       </Link>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginTop: 16, marginBottom: 16 }}>GTM API call log</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 600, marginTop: 16, marginBottom: 16 }}>Stape API call log</h1>
       <ApiLogList
         logs={logs}
-        emptyHint='No calls logged yet — open "Set up in Google Tag Manager" to generate a preview, which already makes read calls against the GTM API.'
+        emptyHint='No calls logged yet — open "Set up in Stape.io" to generate a preview, which already makes read calls against the Stape API.'
       />
     </main>
   );

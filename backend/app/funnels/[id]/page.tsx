@@ -41,10 +41,19 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
         {approved ? (
           <>
             <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
-              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
+              Pipeline: GTM → GA4 → Stape.io → Validate. Each step only touches what its own preview describes.
             </span>
-            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
-              Set up in Google Tag Manager →
+            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              1. GTM →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/ga4-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              2. GA4 →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/stape-setup`} className="btn" style={{ textDecoration: 'none' }}>
+              3. Stape.io →
+            </Link>
+            <Link href={`/funnels/${funnel.id}/validate`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+              4. Validate →
             </Link>
           </>
         ) : (

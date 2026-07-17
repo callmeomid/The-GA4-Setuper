@@ -48,8 +48,8 @@ function truncate(value: unknown, max = 4000): string {
 export type GtmCallContext = { funnelId?: string; userId?: string };
 
 // Every GTM API call in this app goes through here, so every call — success
-// or failure — leaves a row in GtmApiLog with the request, response, status,
-// and duration. Nothing calls the raw client directly.
+// or failure — leaves a row in ApiLog (system: "gtm") with the request,
+// response, status, and duration. Nothing calls the raw client directly.
 export async function callGtmLogged<T>(
   context: GtmCallContext,
   method: string,
@@ -60,8 +60,9 @@ export async function callGtmLogged<T>(
   const start = Date.now();
   try {
     const res = await fn();
-    await prisma.gtmApiLog.create({
+    await prisma.apiLog.create({
       data: {
+        system: 'gtm',
         funnelId: context.funnelId ?? null,
         userId: context.userId ?? null,
         method,
@@ -75,8 +76,9 @@ export async function callGtmLogged<T>(
     return res.data;
   } catch (err) {
     const translated = translateError(err);
-    await prisma.gtmApiLog.create({
+    await prisma.apiLog.create({
       data: {
+        system: 'gtm',
         funnelId: context.funnelId ?? null,
         userId: context.userId ?? null,
         method,

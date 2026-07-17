@@ -24,7 +24,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
   funnels       Funnel[]
-  gtmConnection GtmConnection?
+  gtmConnection   GtmConnection?
+  ga4Connection   Ga4Connection?
+  stapeConnection StapeConnection?
 }
 
 // A *separate* OAuth grant from sign-in (see lib/gtm/oauth.ts) — requested only
@@ -44,6 +46,42 @@ model GtmConnection {
   gtmContainerPublicId String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+}
+
+// Separate incremental OAuth grant (see lib/ga4/oauth.ts), scoped to
+// analytics.edit. Unlike GTM, the GA4 Admin API has no draft/publish split —
+// there is no scope we can withhold to make writes structurally non-live, so
+// every write this connection makes (a conversion event, an MP secret) takes
+// effect on the real property immediately. The preview UI says so explicitly.
+model Ga4Connection {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken         String
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+  ga4PropertyId         String?
+  ga4PropertyDisplayName String?
+  ga4MeasurementId       String?
+  ga4DataStreamName      String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+// Stape has no OAuth — access is a personal API key generated in Stape's
+// account settings, sent as X-AUTH-TOKEN on every request (see
+// lib/stape/client.ts). Stored the same way the extension's own apiKey is:
+// a bearer secret, not an OAuth token.
+model StapeConnection {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey            String
+  region            String   @default("global") // "global" | "eu"
+  containerIdentifier String?
+  containerName     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Account {
@@ -99,14 +137,30 @@ model Funnel {
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
 
-  gtmApiLogs GtmApiLog[]
+  // GA4 property this funnel's conversion events were written to — set once
+  // ga4-push runs. Independent of the GtmConnection's own account-wide
+  // selection, since a funnel can target a different property.
+  ga4PropertyId String?
+
+  // Null until the user answers the "does this funnel span subdomains?"
+  // question in the Stape setup flow — that answer materially changes the
+  // domain/cookie plan (see lib/stape/plan.ts), so we ask instead of guessing.
+  stapeSpansSubdomains Boolean?
+  stapeContainerIdentifier String?
+
+  apiLogs         ApiLog[]
+  validationRuns  ValidationRun[]
 }
 
-// Persisted (not just console.log'd) so every GTM API call made on behalf of
-// this funnel stays inspectable after the fact for debugging.
-model GtmApiLog {
+// Persisted (not just console.log'd) so every third-party API call made on
+// behalf of this funnel stays inspectable after the fact for debugging.
+// Covers GTM, GA4, and Stape — one shared log shape, distinguished by
+// `system`, so the log viewer and retention logic don't triplicate.
+model ApiLog {
   id       String  @id @default(cuid())
-  // Nullable: some calls (listing accounts/containers while connecting GTM)
+  // "gtm" | "ga4" | "stape"
+  system   String  @default("gtm")
+  // Nullable: some calls (listing accounts/containers while connecting)
   // happen before a funnel is in scope. Push-execution calls always set this.
   funnelId String?
   funnel   Funnel? @relation(fields: [funnelId], references: [id], onDelete: Cascade)
@@ -121,6 +175,24 @@ model GtmApiLog {
   durationMs     Int?
   errorMessage   String?
   createdAt      DateTime @default(now())
+
+  @@index([funnelId, createdAt])
+  @@index([funnelId, system, createdAt])
+}
+
+// One row per "run validation" click. Per-step results are JSON-encoded
+// (StepValidationResult[]) rather than a child table — SQLite has no native
+// array column and this data is never queried per-field, only rendered.
+model ValidationRun {
+  id          String   @id @default(cuid())
+  funnelId    String
+  funnel      Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  userId      String
+  // "ga4_realtime" | "bigquery" — which read API confirmed landing.
+  source      String
+  resultsJson String
+  overallPass Boolean
+  createdAt   DateTime @default(now())
 
   @@index([funnelId, createdAt])
 }
@@ -151,8 +223,14 @@ model FunnelStep {
   gtmTriggerId String?
   gtmTagId     String?
   // GA4 event name shown+editable in the preview UI before push; derived by
-  // lib/gtm/event-name.ts but the user's edit always wins.
+  // lib/gtm/event-name.ts but the user's edit always wins. Doubles as the
+  // name registered as a GA4 Admin API conversion event — the two must match
+  // for marking it "conversion" to actually apply to the incoming hits.
   ga4EventName String?
+  // Resource name (properties/{p}/conversionEvents/{c}) of the GA4 Admin API
+  // conversion event, once created — lets ga4-push tell "already registered
+  // by us" apart from "another conversion event happens to share this name."
+  ga4ConversionEventResourceName String?
 
   @@index([funnelId, order])
 }
