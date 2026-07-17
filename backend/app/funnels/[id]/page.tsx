@@ -37,11 +37,16 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
 
       <FlowDiagram steps={funnel.steps} approved={approved} />
 
-      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
         {approved ? (
-          <span className="mono" style={{ fontSize: 12, color: 'var(--accent)' }}>
-            ✓ Approved — GTM/GA4/Stape generation isn't built yet, so nothing downstream has run.
-          </span>
+          <>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
+              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
+            </span>
+            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+              Set up in Google Tag Manager →
+            </Link>
+          </>
         ) : (
           <ApproveButton funnelId={funnel.id} />
         )}

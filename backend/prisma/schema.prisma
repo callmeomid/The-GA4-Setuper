@@ -24,6 +24,26 @@ model User {
   accounts      Account[]
   sessions      Session[]
   funnels       Funnel[]
+  gtmConnection GtmConnection?
+}
+
+// A *separate* OAuth grant from sign-in (see lib/gtm/oauth.ts) — requested only
+// when the user clicks "Connect Google Tag Manager", scoped to
+// tagmanager.readonly + tagmanager.edit.containers. We deliberately never
+// request tagmanager.publish, so this app is structurally incapable of
+// publishing a GTM container, not just "coded not to."
+model GtmConnection {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken         String
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+  gtmAccountId         String?
+  gtmContainerId       String?
+  gtmContainerPublicId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model Account {
@@ -71,6 +91,38 @@ model Funnel {
   steps     FunnelStep[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+
+  // Set once we create (or reuse) the dedicated GTM workspace for this funnel.
+  gtmWorkspaceId   String?
+  ga4MeasurementId String?
+  // Name of the GA4 Configuration tag every event tag references — either one
+  // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
+  ga4ConfigTagName String?
+
+  gtmApiLogs GtmApiLog[]
+}
+
+// Persisted (not just console.log'd) so every GTM API call made on behalf of
+// this funnel stays inspectable after the fact for debugging.
+model GtmApiLog {
+  id       String  @id @default(cuid())
+  // Nullable: some calls (listing accounts/containers while connecting GTM)
+  // happen before a funnel is in scope. Push-execution calls always set this.
+  funnelId String?
+  funnel   Funnel? @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  // Plain field, not a relation — this is transient debug data, not something
+  // we need referential integrity on.
+  userId         String?
+  method         String
+  endpoint       String
+  requestBody    String?
+  responseStatus Int?
+  responseBody   String?
+  durationMs     Int?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([funnelId, createdAt])
 }
 
 model FunnelStep {
@@ -93,6 +145,14 @@ model FunnelStep {
   gtmStatus   String @default("pending")
   ga4Status   String @default("pending")
   stapeStatus String @default("pending")
+
+  // Set once created/reused in GTM, so re-running the push is idempotent
+  // (skip/update instead of creating duplicates).
+  gtmTriggerId String?
+  gtmTagId     String?
+  // GA4 event name shown+editable in the preview UI before push; derived by
+  // lib/gtm/event-name.ts but the user's edit always wins.
+  ga4EventName String?
 
   @@index([funnelId, order])
 }
