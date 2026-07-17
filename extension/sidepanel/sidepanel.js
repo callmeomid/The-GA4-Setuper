@@ -159,10 +159,15 @@ function buildExportSpec() {
   };
 }
 
-function showExportView() {
+async function showExportView() {
   document.getElementById('recorder-view').classList.add('hidden');
   document.getElementById('export-view').classList.remove('hidden');
   document.getElementById('json-output').textContent = JSON.stringify(buildExportSpec(), null, 2);
+
+  const config = await loadBackendConfig();
+  document.getElementById('backend-url').value = config.url;
+  document.getElementById('api-key').value = config.apiKey;
+  document.getElementById('send-result').textContent = '';
 }
 
 function showRecorderView() {
@@ -170,18 +175,38 @@ function showRecorderView() {
   document.getElementById('recorder-view').classList.remove('hidden');
 }
 
-async function sendFunnelSpec(url, spec) {
+async function sendFunnelSpec(url, apiKey, spec) {
   if (!url) return { ok: false, error: 'Enter a backend URL first' };
+  if (!apiKey) return { ok: false, error: 'Enter an API key first' };
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(spec),
     });
     return { ok: res.ok, status: res.status };
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+function loadBackendConfig() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('backendConfig', (data) => resolve(data.backendConfig || { url: '', apiKey: '' }));
+  });
+}
+
+function saveBackendConfig(config) {
+  return new Promise((resolve) => chrome.storage.local.set({ backendConfig: config }, resolve));
+}
+
+async function persistBackendConfig() {
+  const url = document.getElementById('backend-url').value.trim();
+  const apiKey = document.getElementById('api-key').value.trim();
+  await saveBackendConfig({ url, apiKey });
 }
 
 document.getElementById('funnel-name').addEventListener('blur', async (e) => {
@@ -219,12 +244,17 @@ document.getElementById('copy-btn').addEventListener('click', async () => {
   }, 1500);
 });
 
+document.getElementById('backend-url').addEventListener('blur', persistBackendConfig);
+document.getElementById('api-key').addEventListener('blur', persistBackendConfig);
+
 document.getElementById('send-btn').addEventListener('click', async () => {
   const url = document.getElementById('backend-url').value.trim();
+  const apiKey = document.getElementById('api-key').value.trim();
+  await persistBackendConfig();
   const resultEl = document.getElementById('send-result');
   resultEl.className = 'send-result';
   resultEl.textContent = 'Sending…';
-  const result = await sendFunnelSpec(url, buildExportSpec());
+  const result = await sendFunnelSpec(url, apiKey, buildExportSpec());
   if (result.ok) {
     resultEl.className = 'send-result ok';
     resultEl.textContent = `Sent — server responded ${result.status}`;
