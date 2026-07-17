@@ -2,14 +2,17 @@ import { getServerSession } from 'next-auth';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
+import { encryptWorkspaceSecret } from '@/lib/crypto/tokenVault';
 import { exchangeGtmCode } from '@/lib/gtm/oauth';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 export async function GET(request: Request) {
   const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.redirect(new URL('/signin', base));
   const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser(userId);
 
   const url = new URL(request.url);
   const error = url.searchParams.get('error');
@@ -33,24 +36,30 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/settings?gtmError=token_exchange_failed', base));
   }
 
-  const existing = await prisma.gtmConnection.findUnique({ where: { userId } });
+  const existing = await prisma.gtmConnection.findUnique({ where: { workspaceId } });
   if (!tokens.refresh_token && !existing) {
     // Google only omits refresh_token on repeat consent without prompt=consent;
     // we always pass prompt=consent, so this means something unexpected happened.
     return NextResponse.redirect(new URL('/settings?gtmError=no_refresh_token', base));
   }
 
+  const accessTokenEnc = tokens.access_token
+    ? await encryptWorkspaceSecret(workspaceId, 'gtmAccessToken', tokens.access_token)
+    : null;
+
   await prisma.gtmConnection.upsert({
-    where: { userId },
+    where: { workspaceId },
     create: {
-      userId,
-      refreshToken: tokens.refresh_token ?? '',
-      accessToken: tokens.access_token ?? null,
+      workspaceId,
+      refreshTokenEnc: await encryptWorkspaceSecret(workspaceId, 'gtmRefreshToken', tokens.refresh_token ?? ''),
+      accessTokenEnc,
       accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     },
     update: {
-      ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
-      accessToken: tokens.access_token ?? null,
+      ...(tokens.refresh_token
+        ? { refreshTokenEnc: await encryptWorkspaceSecret(workspaceId, 'gtmRefreshToken', tokens.refresh_token) }
+        : {}),
+      accessTokenEnc,
       accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     },
   });

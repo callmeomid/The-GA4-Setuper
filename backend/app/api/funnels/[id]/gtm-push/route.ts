@@ -6,6 +6,7 @@ import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 type StepResult = {
   stepId: string;
@@ -19,14 +20,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser(userId);
 
   const body = await request.json().catch(() => ({}));
   const overrideMeasurementId: string | undefined = body?.ga4MeasurementId;
   const eventNameOverrides: Record<string, string> = body?.eventNameOverrides ?? {};
 
   try {
-    const funnel = await loadFunnelForGtm(userId, params.id);
-    const connection = await loadGtmConnection(userId);
+    const funnel = await loadFunnelForGtm(workspaceId, params.id);
+    const connection = await loadGtmConnection(workspaceId);
 
     if (overrideMeasurementId) {
       await prisma.funnel.update({ where: { id: funnel.id }, data: { ga4MeasurementId: overrideMeasurementId } });

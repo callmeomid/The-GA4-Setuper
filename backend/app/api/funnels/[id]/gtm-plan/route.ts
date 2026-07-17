@@ -5,15 +5,17 @@ import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser(userId);
 
   try {
-    const funnel = await loadFunnelForGtm(userId, params.id);
-    const connection = await loadGtmConnection(userId);
+    const funnel = await loadFunnelForGtm(workspaceId, params.id);
+    const connection = await loadGtmConnection(workspaceId);
     const { workspace, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection);
 
     if (workspace.workspaceId && workspace.workspaceId !== funnel.gtmWorkspaceId) {

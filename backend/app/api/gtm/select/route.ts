@@ -2,11 +2,12 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser((session.user as { id: string }).id);
 
   const body = await request.json();
   const { accountId, containerId, containerPublicId } = body ?? {};
@@ -14,11 +15,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'accountId and containerId are required' }, { status: 400 });
   }
 
-  const connection = await prisma.gtmConnection.findUnique({ where: { userId } });
+  const connection = await prisma.gtmConnection.findUnique({ where: { workspaceId } });
   if (!connection) return NextResponse.json({ error: 'Not connected to Google Tag Manager' }, { status: 400 });
 
   await prisma.gtmConnection.update({
-    where: { userId },
+    where: { workspaceId },
     data: { gtmAccountId: accountId, gtmContainerId: containerId, gtmContainerPublicId: containerPublicId ?? null },
   });
 

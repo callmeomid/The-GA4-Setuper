@@ -3,14 +3,15 @@ import { getServerSession } from 'next-auth';
 import { notFound, redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 export default async function GtmLogPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/signin');
-  const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser((session.user as { id: string }).id);
 
   const funnel = await prisma.funnel.findUnique({ where: { id: params.id } });
-  if (!funnel || funnel.ownerId !== userId) notFound();
+  if (!funnel || funnel.workspaceId !== workspaceId) notFound();
 
   const logs = await prisma.gtmApiLog.findMany({
     where: { funnelId: params.id },

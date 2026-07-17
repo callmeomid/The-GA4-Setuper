@@ -3,16 +3,17 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 import { SignOutButton } from '@/components/SignOutButton';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/signin');
-  const userId = (session.user as { id: string }).id;
+  const workspaceId = await requireWorkspaceIdForUser((session.user as { id: string }).id);
 
   const funnels = await prisma.funnel.findMany({
-    where: { ownerId: userId },
+    where: { workspaceId },
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { steps: true } } },
   });

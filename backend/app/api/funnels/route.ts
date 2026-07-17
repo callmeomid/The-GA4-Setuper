@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FunnelSpecSchema } from '@/lib/schema';
+import { requireWorkspaceIdForUser } from '@/lib/workspace';
 
 async function authenticateByApiKey(request: Request) {
   const authHeader = request.headers.get('authorization') ?? '';
@@ -30,10 +31,12 @@ export async function POST(request: Request) {
   }
 
   const spec = parsed.data;
+  const workspaceId = await requireWorkspaceIdForUser(user.id);
   const funnel = await prisma.funnel.create({
     data: {
       name: spec.funnelName,
       ownerId: user.id,
+      workspaceId,
       status: 'draft',
       steps: {
         create: spec.steps
@@ -58,9 +61,10 @@ export async function POST(request: Request) {
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const workspaceId = await requireWorkspaceIdForUser((session.user as { id: string }).id);
 
   const funnels = await prisma.funnel.findMany({
-    where: { ownerId: (session.user as { id: string }).id },
+    where: { workspaceId },
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { steps: true } } },
   });

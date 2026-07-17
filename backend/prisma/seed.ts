@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { getOrCreateWorkspaceForUser } from '../lib/workspace';
 
 const prisma = new PrismaClient();
 
@@ -12,7 +13,10 @@ async function main() {
       apiKey: 'demo-api-key-local-dev-only',
     },
   });
-  console.log('Seeded user:', user.id, user.email, 'apiKey:', user.apiKey);
+  // Bypasses the NextAuth `createUser` event (this user is upserted directly,
+  // not signed in through Google), so provision the workspace here instead.
+  const workspace = await getOrCreateWorkspaceForUser(user.id);
+  console.log('Seeded user:', user.id, user.email, 'apiKey:', user.apiKey, 'workspace:', workspace.id);
 }
 
 main()

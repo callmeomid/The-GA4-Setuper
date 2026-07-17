@@ -2,6 +2,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { prisma } from './prisma';
+import { getOrCreateWorkspaceForUser } from './workspace';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -16,6 +17,14 @@ export const authOptions: NextAuthOptions = {
   ],
   pages: {
     signIn: '/signin',
+  },
+  events: {
+    // Fires once, right after the adapter inserts a brand-new User row —
+    // the natural place to provision their personal workspace (and its
+    // encryption key) before they can reach any workspace-scoped route.
+    async createUser({ user }) {
+      await getOrCreateWorkspaceForUser(user.id);
+    },
   },
   callbacks: {
     async session({ session, user }) {

@@ -12,19 +12,60 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
+  id                   String            @id @default(cuid())
+  name                 String?
+  email                String?           @unique
+  emailVerified        DateTime?
+  image                String?
   // Personal ingestion token the Chrome extension sends as `Authorization: Bearer <apiKey>`.
   // The extension can't do an OAuth redirect flow from a background fetch, so it
   // authenticates with this instead of a browser session.
-  apiKey        String    @unique @default(cuid())
-  accounts      Account[]
-  sessions      Session[]
+  apiKey               String            @unique @default(cuid())
+  accounts             Account[]
+  sessions             Session[]
+  funnels              Funnel[]
+  workspaceMemberships WorkspaceMember[]
+}
+
+// The account-scoping boundary: every funnel, GTM connection, etc. belongs to
+// exactly one workspace, and a workspace has one or more members. One
+// workspace is auto-created per user today (see lib/workspace.ts), but the
+// membership join table means growing a workspace to multiple users later —
+// agency/client access — needs no data model change, just a UI to invite.
+model Workspace {
+  id   String @id
+  name String
+
+  // Envelope encryption for this workspace's secrets (GTM/GA4/Stape tokens):
+  // wrappedDek is this workspace's Data Encryption Key, generated once and
+  // encrypted ("wrapped") with the deployment's master key (see
+  // lib/crypto/kek.ts). The unwrapped DEK never touches the database — only
+  // server memory, for the duration of a single encrypt/decrypt call. See
+  // lib/crypto/workspaceKeys.ts.
+  wrappedDek    String
+  dekKeyVersion Int    @default(1)
+
+  members       WorkspaceMember[]
   funnels       Funnel[]
   gtmConnection GtmConnection?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // "OWNER" | "MEMBER" — every workspace has exactly one OWNER (its creator)
+  // today. Not enforced beyond application code, matching how status enums
+  // are handled elsewhere in this schema (see top-of-file note).
+  role        String    @default("OWNER")
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
 }
 
 // A *separate* OAuth grant from sign-in (see lib/gtm/oauth.ts) — requested only
@@ -34,10 +75,13 @@ model User {
 // publishing a GTM container, not just "coded not to."
 model GtmConnection {
   id                   String    @id @default(cuid())
-  userId               String    @unique
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshToken         String
-  accessToken          String?
+  workspaceId          String    @unique
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Encrypted with this workspace's DEK (AES-256-GCM, see
+  // lib/crypto/tokenVault.ts) — never stored in plaintext. Each is a
+  // serialized EncryptedBlob JSON string, not a raw token.
+  refreshTokenEnc      String
+  accessTokenEnc       String?
   accessTokenExpiresAt DateTime?
   gtmAccountId         String?
   gtmContainerId       String?
@@ -82,15 +126,19 @@ model VerificationToken {
 }
 
 model Funnel {
-  id        String       @id @default(cuid())
-  name      String
+  id          String       @id @default(cuid())
+  name        String
   // "draft" | "approved"
-  status    String       @default("draft")
-  ownerId   String
-  owner     User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  steps     FunnelStep[]
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  status      String       @default("draft")
+  // The account-scoping boundary: access control checks workspaceId, not
+  // ownerId. ownerId is kept as "who captured this" attribution only.
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  steps       FunnelStep[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   // Set once we create (or reuse) the dedicated GTM workspace for this funnel.
   gtmWorkspaceId   String?
@@ -105,11 +153,11 @@ model Funnel {
 // Persisted (not just console.log'd) so every GTM API call made on behalf of
 // this funnel stays inspectable after the fact for debugging.
 model GtmApiLog {
-  id       String  @id @default(cuid())
+  id             String   @id @default(cuid())
   // Nullable: some calls (listing accounts/containers while connecting GTM)
   // happen before a funnel is in scope. Push-execution calls always set this.
-  funnelId String?
-  funnel   Funnel? @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  funnelId       String?
+  funnel         Funnel?  @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   // Plain field, not a relation — this is transient debug data, not something
   // we need referential integrity on.
   userId         String?
@@ -132,10 +180,10 @@ model FunnelStep {
   order    Int
   label    String
 
-  urlPattern String
+  urlPattern     String
   // "click" | "pageview" | "formSubmit"
-  triggerType String
-  selector    String?
+  triggerType    String
+  selector       String?
   // JSON-encoded string[] — SQLite has no native array/list column type.
   formFieldsJson String?
 

@@ -1,3 +1,4 @@
+import { decryptWorkspaceSecret } from '@/lib/crypto/tokenVault';
 import { prisma } from '@/lib/prisma';
 import {
   ensureBuiltInVariables,
@@ -16,23 +17,30 @@ export class SetupError extends Error {
   }
 }
 
-export async function loadFunnelForGtm(userId: string, funnelId: string) {
+export async function loadFunnelForGtm(workspaceId: string, funnelId: string) {
   const funnel = await prisma.funnel.findUnique({
     where: { id: funnelId },
     include: { steps: { orderBy: { order: 'asc' } } },
   });
-  if (!funnel || funnel.ownerId !== userId) throw new SetupError('Funnel not found', 404);
+  if (!funnel || funnel.workspaceId !== workspaceId) throw new SetupError('Funnel not found', 404);
   if (funnel.status !== 'approved') throw new SetupError('Approve this funnel before setting up GTM.', 400);
   return funnel;
 }
 
-export async function loadGtmConnection(userId: string) {
-  const connection = await prisma.gtmConnection.findUnique({ where: { userId } });
+// Decrypts the refresh token just-in-time — the plaintext lives only in this
+// return value's caller, never in a log, session, or client response.
+export async function loadGtmConnection(workspaceId: string) {
+  const connection = await prisma.gtmConnection.findUnique({ where: { workspaceId } });
   if (!connection) throw new SetupError('Connect Google Tag Manager in Settings first.', 400);
   if (!connection.gtmAccountId || !connection.gtmContainerId) {
     throw new SetupError('Select a GTM container in Settings first.', 400);
   }
-  return connection as typeof connection & { gtmAccountId: string; gtmContainerId: string };
+  const refreshToken = await decryptWorkspaceSecret(workspaceId, 'gtmRefreshToken', connection.refreshTokenEnc);
+  return { ...connection, refreshToken } as typeof connection & {
+    refreshToken: string;
+    gtmAccountId: string;
+    gtmContainerId: string;
+  };
 }
 
 // Getting or creating the dedicated workspace and enabling built-in variables
