@@ -170,14 +170,16 @@ function showRecorderView() {
   document.getElementById('recorder-view').classList.remove('hidden');
 }
 
-async function sendFunnelSpec(url, spec) {
+async function sendFunnelSpec(url, apiKey, spec) {
   if (!url) return { ok: false, error: 'Enter a backend URL first' };
+  if (!apiKey) return { ok: false, error: 'Enter your API key first — find it on the onboarding "Record" screen' };
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(spec),
     });
+    if (res.status === 401) return { ok: false, error: 'Rejected — check that the API key is correct' };
     return { ok: res.ok, status: res.status };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -219,12 +221,23 @@ document.getElementById('copy-btn').addEventListener('click', async () => {
   }, 1500);
 });
 
+document.getElementById('backend-url').addEventListener('blur', async (e) => {
+  const apiKey = document.getElementById('api-key').value.trim();
+  await sendMessage({ type: 'SET_SEND_CONFIG', backendUrl: e.target.value.trim(), apiKey });
+});
+
+document.getElementById('api-key').addEventListener('blur', async (e) => {
+  const backendUrl = document.getElementById('backend-url').value.trim();
+  await sendMessage({ type: 'SET_SEND_CONFIG', backendUrl, apiKey: e.target.value.trim() });
+});
+
 document.getElementById('send-btn').addEventListener('click', async () => {
   const url = document.getElementById('backend-url').value.trim();
+  const apiKey = document.getElementById('api-key').value.trim();
   const resultEl = document.getElementById('send-result');
   resultEl.className = 'send-result';
   resultEl.textContent = 'Sending…';
-  const result = await sendFunnelSpec(url, buildExportSpec());
+  const result = await sendFunnelSpec(url, apiKey, buildExportSpec());
   if (result.ok) {
     resultEl.className = 'send-result ok';
     resultEl.textContent = `Sent — server responded ${result.status}`;
@@ -245,4 +258,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   state = await sendMessage({ type: 'GET_STATE' });
   state.steps.forEach((s) => renderedIds.add(s.id));
   render();
+
+  const sendConfig = await sendMessage({ type: 'GET_SEND_CONFIG' });
+  document.getElementById('backend-url').value = sendConfig.backendUrl || '';
+  document.getElementById('api-key').value = sendConfig.apiKey || '';
 })();

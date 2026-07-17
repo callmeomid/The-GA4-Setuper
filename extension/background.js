@@ -1,8 +1,13 @@
 const DEFAULT_STATE = { recording: false, recordingOrigin: null, funnelName: '', steps: [] };
+// Kept separate from funnelState so resetting a funnel never wipes where/how to send it.
+const DEFAULT_SEND_CONFIG = { backendUrl: '', apiKey: '' };
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get('funnelState', (data) => {
     if (!data.funnelState) chrome.storage.local.set({ funnelState: DEFAULT_STATE });
+  });
+  chrome.storage.local.get('sendConfig', (data) => {
+    if (!data.sendConfig) chrome.storage.local.set({ sendConfig: DEFAULT_SEND_CONFIG });
   });
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 });
@@ -15,6 +20,16 @@ function getState() {
 
 function setState(state) {
   return new Promise((resolve) => chrome.storage.local.set({ funnelState: state }, resolve));
+}
+
+function getSendConfig() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('sendConfig', (data) => resolve(data.sendConfig || DEFAULT_SEND_CONFIG));
+  });
+}
+
+function setSendConfig(sendConfig) {
+  return new Promise((resolve) => chrome.storage.local.set({ sendConfig }, resolve));
 }
 
 function safeOrigin(url) {
@@ -80,6 +95,15 @@ async function handleMessage(message, sender) {
     case 'RESET_FUNNEL': {
       await setState(DEFAULT_STATE);
       return DEFAULT_STATE;
+    }
+
+    case 'GET_SEND_CONFIG':
+      return getSendConfig();
+
+    case 'SET_SEND_CONFIG': {
+      const nextConfig = { backendUrl: message.backendUrl, apiKey: message.apiKey };
+      await setSendConfig(nextConfig);
+      return nextConfig;
     }
 
     default:

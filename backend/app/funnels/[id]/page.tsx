@@ -31,8 +31,10 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{funnel.name}</h1>
         <StatusBadge status={funnel.status} />
       </div>
-      <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 4, marginBottom: 8 }}>
-        {funnel.steps.length} steps captured. Scan the flow below, then approve it to move to setup.
+      <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 4, marginBottom: 8, maxWidth: '58ch' }}>
+        {funnel.steps.length} steps captured. This is the exact shape of what we&rsquo;ll build in GTM — one trigger
+        and one tag per node below. Check the labels and URLs now; it&rsquo;s cheaper to fix here than after
+        anything is connected.
       </p>
 
       <FlowDiagram steps={funnel.steps} approved={approved} />
@@ -40,9 +42,13 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
       <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
         {approved ? (
           <>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
-              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
-            </span>
+            <Link
+              href={`/funnels/${funnel.id}/preview`}
+              className="mono"
+              style={{ fontSize: 11, color: 'var(--line-secondary)', textDecoration: 'none' }}
+            >
+              View plain-English preview
+            </Link>
             <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
               Set up in Google Tag Manager →
             </Link>

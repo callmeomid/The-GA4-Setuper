@@ -11,7 +11,7 @@ export function ApproveButton({ funnelId }: { funnelId: string }) {
     setPending(true);
     try {
       const res = await fetch(`/api/funnels/${funnelId}/approve`, { method: 'POST' });
-      if (res.ok) router.refresh();
+      if (res.ok) router.push(`/funnels/${funnelId}/preview`);
     } finally {
       setPending(false);
     }
