@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
 type Step = {
   id: string;
   order: number;
@@ -10,6 +14,8 @@ type Step = {
   ga4Status: string;
   stapeStatus: string;
 };
+
+const STAGGER_MS = 70;
 
 function PendingPill({ system, status }: { system: string; status: string }) {
   const done = status !== 'pending';
@@ -27,6 +33,7 @@ function PendingPill({ system, status }: { system: string; status: string }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 4,
+        transition: 'border-color 150ms linear, color 150ms linear',
       }}
     >
       <span
@@ -35,6 +42,7 @@ function PendingPill({ system, status }: { system: string; status: string }) {
           height: 4,
           borderRadius: '50%',
           background: done ? 'var(--accent)' : 'var(--line-secondary)',
+          transition: 'background 150ms linear',
         }}
       />
       {system} · {done ? status : 'pending'}
@@ -42,24 +50,45 @@ function PendingPill({ system, status }: { system: string; status: string }) {
   );
 }
 
-function Connector({ solid }: { solid: boolean }) {
+function Connector({ approved, delayMs }: { approved: boolean; delayMs: number }) {
   return (
     <div
       style={{
         flex: '0 0 32px',
         alignSelf: 'center',
-        height: 0,
-        borderTop: `1px ${solid ? 'solid' : 'dashed'} ${solid ? 'var(--accent)' : 'var(--line-ghost)'}`,
         position: 'relative',
+        height: 1,
       }}
     >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderTop: '1px dashed var(--line-ghost)',
+          opacity: approved ? 0 : 1,
+          transition: `opacity 150ms linear`,
+          transitionDelay: `${delayMs}ms`,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderTop: '1px solid var(--accent)',
+          opacity: approved ? 1 : 0,
+          transition: `opacity 150ms linear`,
+          transitionDelay: `${delayMs}ms`,
+        }}
+      />
       <span
         style={{
           position: 'absolute',
           right: -2,
           top: -7,
           fontSize: 12,
-          color: solid ? 'var(--accent)' : 'var(--line-secondary)',
+          color: approved ? 'var(--accent)' : 'var(--line-secondary)',
+          transition: `color 150ms linear`,
+          transitionDelay: `${delayMs}ms`,
         }}
       >
         →
@@ -69,6 +98,19 @@ function Connector({ solid }: { solid: boolean }) {
 }
 
 export function FlowDiagram({ steps, approved }: { steps: Step[]; approved: boolean }) {
+  const prevApproved = useRef(approved);
+  const [pulsing, setPulsing] = useState(false);
+
+  useEffect(() => {
+    if (!prevApproved.current && approved) {
+      setPulsing(true);
+      const t = setTimeout(() => setPulsing(false), steps.length * STAGGER_MS + 300);
+      prevApproved.current = approved;
+      return () => clearTimeout(t);
+    }
+    prevApproved.current = approved;
+  }, [approved, steps.length]);
+
   return (
     <div
       className="dot-grid"
@@ -82,19 +124,24 @@ export function FlowDiagram({ steps, approved }: { steps: Step[]; approved: bool
     >
       {steps.map((step, index) => {
         const formFields: string[] = step.formFieldsJson ? JSON.parse(step.formFieldsJson) : [];
+        const delayMs = index * STAGGER_MS;
         return (
           <div key={step.id} style={{ display: 'flex', alignItems: 'stretch' }}>
             <div
+              className={pulsing ? 'pulse-confirm' : undefined}
               style={{
                 width: 220,
                 flex: '0 0 220px',
-                border: `1px ${approved ? 'solid' : 'dashed'} ${approved ? 'var(--accent)' : 'var(--line-ghost)'}`,
+                border: `1px solid ${approved ? 'var(--accent)' : 'var(--line-ghost)'}`,
                 borderRadius: 2,
                 padding: '12px 12px 10px',
                 background: 'var(--bg-raised)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 8,
+                transition: 'border-color 150ms linear',
+                transitionDelay: `${delayMs}ms`,
+                animationDelay: pulsing ? `${delayMs}ms` : undefined,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -149,7 +196,7 @@ export function FlowDiagram({ steps, approved }: { steps: Step[]; approved: bool
                 <PendingPill system="Stape" status={step.stapeStatus} />
               </div>
             </div>
-            {index < steps.length - 1 && <Connector solid={approved} />}
+            {index < steps.length - 1 && <Connector approved={approved} delayMs={delayMs} />}
           </div>
         );
       })}

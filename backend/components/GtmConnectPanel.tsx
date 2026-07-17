@@ -80,32 +80,28 @@ export function GtmConnectPanel({
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{error}</div>}
 
-      <select
-        value={accountId}
-        onChange={(e) => setAccountId(e.target.value)}
-        style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2 }}
-      >
-        <option value="">Select GTM account…</option>
-        {accounts.map((a) => (
-          <option key={a.accountId} value={a.accountId}>
-            {a.name}
-          </option>
-        ))}
-      </select>
-
-      {accountId && (
-        <select
-          value={containerId}
-          onChange={(e) => setContainerId(e.target.value)}
-          style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2 }}
-        >
-          <option value="">Select container…</option>
-          {containers.map((c) => (
-            <option key={c.containerId} value={c.containerId}>
-              {c.name} ({c.publicId})
+      <span className="select-wrap">
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="field">
+          <option value="">Select GTM account…</option>
+          {accounts.map((a) => (
+            <option key={a.accountId} value={a.accountId}>
+              {a.name}
             </option>
           ))}
         </select>
+      </span>
+
+      {accountId && (
+        <span className="select-wrap">
+          <select value={containerId} onChange={(e) => setContainerId(e.target.value)} className="field">
+            <option value="">Select container…</option>
+            {containers.map((c) => (
+              <option key={c.containerId} value={c.containerId}>
+                {c.name} ({c.publicId})
+              </option>
+            ))}
+          </select>
+        </span>
       )}
 
       {containerId && (

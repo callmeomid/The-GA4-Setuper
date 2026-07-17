@@ -132,8 +132,8 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
                   value={measurementId}
                   onChange={(e) => setMeasurementId(e.target.value)}
                   placeholder="G-XXXXXXX"
-                  className="mono"
-                  style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2 }}
+                  className="mono field"
+                  style={{ maxWidth: 200 }}
                 />
               </div>
             )}
@@ -185,8 +185,8 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
                     <input
                       value={eventName}
                       onChange={(e) => setEventNameOverrides((prev) => ({ ...prev, [step.stepId]: e.target.value }))}
-                      className="mono"
-                      style={{ background: 'var(--bg)', color: 'var(--accent)', border: '1px solid var(--line-ghost)', padding: '4px 8px', borderRadius: 2, fontSize: 12 }}
+                      className="mono field"
+                      style={{ color: 'var(--accent)', padding: '4px 8px', fontSize: 12 }}
                     />
                   </div>
 
@@ -221,9 +221,29 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
 
       {pushResult && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {pushResult.results.map((r) => (
-            <div key={r.stepId} style={{ border: '1px solid var(--line-ghost)', borderRadius: 2, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>{r.label}</span>
+          <div className="mono row-in" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--line-secondary)' }}>
+            VALIDATING {pushResult.results.length} STEP{pushResult.results.length === 1 ? '' : 'S'}…
+          </div>
+          {pushResult.results.map((r, i) => (
+            <div
+              key={r.stepId}
+              className="row-in"
+              style={{
+                animationDelay: `${i * 90}ms`,
+                border: `1px solid ${r.error ? 'var(--danger)' : 'var(--line-ghost)'}`,
+                borderRadius: 2,
+                padding: 12,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--line-secondary)' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                {r.label}
+              </span>
               <span style={{ display: 'flex', gap: 6 }}>
                 <OutcomeBadge outcome={r.trigger} />
                 <OutcomeBadge outcome={r.tag} />
@@ -231,7 +251,12 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
               {r.error && <span style={{ fontSize: 11, color: 'var(--danger)' }}>{r.error}</span>}
             </div>
           ))}
-          <div style={{ border: '1px solid var(--accent)', borderRadius: 2, padding: 14, marginTop: 8 }}>
+          <div
+            className="corner-frame corner-frame-accent row-in"
+            style={{ padding: 14, marginTop: 8, animationDelay: `${pushResult.results.length * 90 + 100}ms` }}
+          >
+            <span className="corner-tr" />
+            <span className="corner-bl" />
             <p style={{ fontSize: 13, color: 'var(--accent)', margin: '0 0 8px' }}>
               ✓ Draft written to your workspace. Nothing has been published.
             </p>

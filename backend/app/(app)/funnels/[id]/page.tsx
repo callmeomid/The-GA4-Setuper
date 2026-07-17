@@ -3,8 +3,7 @@ import { getServerSession } from 'next-auth';
 import { notFound, redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { FlowDiagram } from '@/components/FlowDiagram';
-import { ApproveButton } from '@/components/ApproveButton';
+import { FunnelFlowPanel } from '@/components/FunnelFlowPanel';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default async function FunnelDetailPage({ params }: { params: { id: string } }) {
@@ -35,22 +34,7 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
         {funnel.steps.length} steps captured. Scan the flow below, then approve it to move to setup.
       </p>
 
-      <FlowDiagram steps={funnel.steps} approved={approved} />
-
-      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
-        {approved ? (
-          <>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
-              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
-            </span>
-            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
-              Set up in Google Tag Manager →
-            </Link>
-          </>
-        ) : (
-          <ApproveButton funnelId={funnel.id} />
-        )}
-      </div>
+      <FunnelFlowPanel funnelId={funnel.id} steps={funnel.steps} initialApproved={approved} />
     </main>
   );
 }

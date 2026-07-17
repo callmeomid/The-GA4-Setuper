@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { SignOutButton } from '@/components/SignOutButton';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default async function DashboardPage() {
@@ -19,13 +18,6 @@ export default async function DashboardPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '32px 20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
-        <span className="mono" style={{ fontSize: 11, letterSpacing: '0.12em', color: 'var(--line-secondary)' }}>
-          FUNNEL SETUPER
-        </span>
-        <SignOutButton />
-      </div>
-
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Your funnels</h1>
       <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 0, marginBottom: 24 }}>
         Captured from the Chrome extension. Review each one as a flow before approving it for setup.
@@ -47,24 +39,18 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {funnels.map((funnel) => (
+          {funnels.map((funnel, index) => (
             <li key={funnel.id}>
-              <Link
-                href={`/funnels/${funnel.id}`}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: '1px solid var(--line-ghost)',
-                  borderRadius: 2,
-                  padding: '14px 16px',
-                  textDecoration: 'none',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 14, marginBottom: 4 }}>{funnel.name}</div>
-                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--line-secondary)' }}>
-                    {funnel._count.steps} steps · {new Date(funnel.createdAt).toLocaleDateString()}
+              <Link href={`/funnels/${funnel.id}`} className="row-link">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--line-secondary)' }}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div>
+                    <div style={{ fontSize: 14, marginBottom: 4 }}>{funnel.name}</div>
+                    <div className="mono" style={{ fontSize: 10.5, color: 'var(--line-secondary)' }}>
+                      {funnel._count.steps} steps · {new Date(funnel.createdAt).toLocaleDateString()}
+                    </div>
                   </div>
                 </div>
                 <StatusBadge status={funnel.status} />
