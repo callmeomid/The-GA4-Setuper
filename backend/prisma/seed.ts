@@ -13,6 +13,16 @@ async function main() {
     },
   });
   console.log('Seeded user:', user.id, user.email, 'apiKey:', user.apiKey);
+
+  // Grants /admin/vouchers access. No-op until this account has signed in at
+  // least once via Google OAuth (the row has to exist first) — safe to re-run.
+  if (process.env.ADMIN_EMAIL) {
+    const { count } = await prisma.user.updateMany({
+      where: { email: process.env.ADMIN_EMAIL },
+      data: { isAdmin: true },
+    });
+    console.log(count ? `Granted isAdmin to ${process.env.ADMIN_EMAIL}` : `${process.env.ADMIN_EMAIL} hasn't signed in yet — skipped`);
+  }
 }
 
 main()
