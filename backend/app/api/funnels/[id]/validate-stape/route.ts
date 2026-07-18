@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { checkContainerHealth } from '@/lib/stape/client';
 import { prisma } from '@/lib/prisma';
 
@@ -8,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 // container to check, so this route only ever runs from the server-mode
 // branch of the validation page.
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 

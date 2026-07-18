@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { createTag, createTrigger, updateTag } from '@/lib/gtm/api';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource, mergeServerContainerUrl } from '@/lib/gtm/resources';
