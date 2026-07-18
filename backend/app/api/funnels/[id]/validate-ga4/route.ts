@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GA4 DebugView isn't readable through any public API — Google only exposes
@@ -8,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 // confirmation after they've triggered the step and watched it appear there,
 // rather than pretending to verify it automatically.
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 

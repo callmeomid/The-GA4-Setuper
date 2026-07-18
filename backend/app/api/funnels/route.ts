@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FunnelSpecSchema } from '@/lib/schema';
 
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const funnels = await prisma.funnel.findMany({
