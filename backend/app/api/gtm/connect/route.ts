@@ -1,12 +1,11 @@
 import crypto from 'crypto';
-import { getServerSession } from 'next-auth';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getGtmAuthorizationUrl } from '@/lib/gtm/oauth';
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.redirect(new URL('/signin', process.env.NEXTAUTH_URL));
 
   const state = crypto.randomBytes(24).toString('hex');

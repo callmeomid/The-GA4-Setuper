@@ -1,13 +1,12 @@
-import { getServerSession } from 'next-auth';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { exchangeGtmCode } from '@/lib/gtm/oauth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
   const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.redirect(new URL('/signin', base));
   const userId = (session.user as { id: string }).id;
 
