@@ -23,6 +23,7 @@ export async function loadFunnelForGtm(userId: string, funnelId: string) {
   });
   if (!funnel || funnel.ownerId !== userId) throw new SetupError('Funnel not found', 404);
   if (funnel.status !== 'approved') throw new SetupError('Approve this funnel before setting up GTM.', 400);
+  if (!funnel.setupMode) throw new SetupError('Choose a setup path (client-side or server-side) before continuing.', 400);
   return funnel;
 }
 
@@ -46,6 +47,7 @@ export async function prepareWorkspaceAndSnapshot(
   funnelId: string,
   funnelName: string,
   connection: { refreshToken: string; gtmAccountId: string; gtmContainerId: string },
+  ga4ConfigTagName?: string | null,
 ) {
   const ctx = { userId, funnelId };
   const workspaceName = `Funnel Setuper: ${funnelName}`;
@@ -66,6 +68,11 @@ export async function prepareWorkspaceAndSnapshot(
     getLiveGa4ConfigTag(ctx, connection.refreshToken, connection.gtmAccountId, connection.gtmContainerId),
   ]);
 
+  // Prefer the tag we created ourselves last run (tracked by name on the
+  // Funnel row); fall back to "any gaawc tag in this workspace" so the
+  // upgrade path still works if that got out of sync somehow.
+  const draftTag = tags.find((t) => t.type === 'gaawc' && t.name === ga4ConfigTagName) ?? tags.find((t) => t.type === 'gaawc') ?? null;
+
   const snapshot: GtmSnapshot = {
     existingTriggers: triggers.map((t) => ({ id: t.triggerId!, name: t.name! })),
     existingTags: tags.map((t) => ({ id: t.tagId!, name: t.name! })),
@@ -73,6 +80,15 @@ export async function prepareWorkspaceAndSnapshot(
       ? {
           name: liveGa4Tag.name!,
           measurementId: liveGa4Tag.parameter?.find((p) => p.key === 'measurementId')?.value ?? '',
+        }
+      : null,
+    draftGa4ConfigTag: draftTag
+      ? {
+          id: draftTag.tagId!,
+          name: draftTag.name!,
+          measurementId: draftTag.parameter?.find((p) => p.key === 'measurementId')?.value ?? '',
+          hasServerContainerUrl: Boolean(draftTag.parameter?.find((p) => p.key === 'transportUrl')?.value),
+          raw: draftTag,
         }
       : null,
   };

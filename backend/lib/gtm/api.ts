@@ -89,6 +89,22 @@ export async function createTag(ctx: GtmCallContext, refreshToken: string, works
   );
 }
 
+// Used for the client → server upgrade path: edits a tag this app already
+// created (identified by id) in place instead of creating a duplicate.
+export async function updateTag(
+  ctx: GtmCallContext,
+  refreshToken: string,
+  workspacePath: string,
+  tagId: string,
+  tag: tagmanager_v2.Schema$Tag,
+) {
+  const tagmanager = getTagmanagerClient(refreshToken);
+  const path = `${workspacePath}/tags/${tagId}`;
+  return callGtmLogged(ctx, 'PUT', 'tags.update', { path, tag }, () =>
+    tagmanager.accounts.containers.workspaces.tags.update({ path, requestBody: tag }),
+  );
+}
+
 // Checked against the *live published version*, not our draft workspace —
 // this is how we find an existing GA4 Configuration tag to reuse instead of
 // creating a duplicate that would double-fire pageviews. A container that's

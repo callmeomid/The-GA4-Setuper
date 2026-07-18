@@ -34,18 +34,27 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
         {funnel.steps.length} steps captured. Scan the flow below, then approve it to move to setup.
       </p>
 
-      <FlowDiagram steps={funnel.steps} approved={approved} />
+      <FlowDiagram steps={funnel.steps} approved={approved} setupMode={funnel.setupMode as 'client' | 'server' | null} />
 
       <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
         {approved ? (
-          <>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
-              GA4/Stape generation isn't built yet — GTM setup below only ever touches a draft workspace.
-            </span>
-            <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
-              Set up in Google Tag Manager →
+          funnel.setupMode ? (
+            <>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)' }}>
+                {funnel.setupMode === 'server' ? 'Server-side (GTM + GA4 + Stape.io)' : 'Client-side (GTM + GA4)'} —{' '}
+                <Link href={`/funnels/${funnel.id}/setup-mode`} style={{ color: 'inherit', textDecoration: 'underline' }}>
+                  {funnel.setupMode === 'client' ? 'add server-side' : 'change'}
+                </Link>
+              </span>
+              <Link href={`/funnels/${funnel.id}/gtm-setup`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+                Set up in Google Tag Manager →
+              </Link>
+            </>
+          ) : (
+            <Link href={`/funnels/${funnel.id}/setup-mode`} className="btn btn-accent" style={{ textDecoration: 'none' }}>
+              Choose setup path →
             </Link>
-          </>
+          )
         ) : (
           <ApproveButton funnelId={funnel.id} />
         )}

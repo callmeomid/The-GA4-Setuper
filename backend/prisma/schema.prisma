@@ -21,6 +21,21 @@ model User {
   // The extension can't do an OAuth redirect flow from a background fetch, so it
   // authenticates with this instead of a browser session.
   apiKey        String    @unique @default(cuid())
+
+  // "free" | "pro" | "business" — synced from Stripe subscription webhooks, never
+  // set directly by the user. Read by lib/billing/limits.ts to size the funnel-push cap.
+  plan                 String    @default("free")
+  // Mirrors the Stripe subscription status ("active" | "trialing" | "past_due" |
+  // "canceled" | "unpaid" | null). Anything other than active/trialing is treated
+  // as free-tier limits by lib/billing/plans.ts, even if `plan` still says otherwise.
+  planStatus           String?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+
+  // Gates /admin/vouchers. Set manually (seed/DB), never via the API.
+  isAdmin       Boolean   @default(false)
+
   accounts      Account[]
   sessions      Session[]
   funnels       Funnel[]
@@ -99,6 +114,22 @@ model Funnel {
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
 
+  // Chosen after approval, before any API calls: null | "client" | "server".
+  // Null routes the funnel page to the decision step instead of GTM setup.
+  // Switching an existing "client" funnel to "server" later is how the
+  // upgrade path works — see lib/stape/setup.ts and plan.ts's 'upgrade'
+  // outcome, which detects and edits the GA4 config tag this app already
+  // created instead of creating a duplicate.
+  setupMode String?
+
+  // Populated only once setupMode is "server" and Stape setup has run.
+  stapeContainerId     String?
+  stapeSubdomain       String?
+  stapeContainerUrl    String?
+  // "pending" | "created" | "healthy" | "unreachable"
+  stapeContainerStatus String  @default("pending")
+  stapeCookieName      String?
+
   gtmApiLogs GtmApiLog[]
 }
 
@@ -155,4 +186,45 @@ model FunnelStep {
   ga4EventName String?
 
   @@index([funnelId, order])
+}
+
+// Admin-managed discount codes (see /admin/vouchers, lib/billing/vouchers.ts).
+// Percent/amount vouchers are mirrored into a real Stripe Coupon + PromotionCode
+// so they're typeable at Stripe Checkout's native promo-code field. Trial-day
+// vouchers have no Stripe counterpart — trial_period_days can't be attached to a
+// coupon, so they only work through the pre-applied /billing/redeem link, which
+// builds the Checkout Session with the trial baked in directly.
+model Voucher {
+  id   String @id @default(cuid())
+  code String @unique
+
+  // "percent_off" | "amount_off" | "trial_days"
+  type String
+  // percent_off: 1-100. amount_off: minor currency units (cents). trial_days: whole days.
+  value    Int
+  // Required for amount_off only, e.g. "usd".
+  currency String?
+
+  // Applies to percent_off/amount_off only — "once" | "repeating" | "forever".
+  duration         String?
+  // Required when duration = "repeating".
+  durationInMonths Int?
+
+  // Redemption window. Both optional — null startsAt means valid immediately,
+  // null endsAt means no expiry.
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  maxRedemptions Int?
+  timesRedeemed  Int @default(0)
+
+  // Manual kill switch independent of the redemption window/count.
+  active Boolean @default(true)
+
+  // Set only for percent_off/amount_off vouchers — the mirrored Stripe objects.
+  stripeCouponId         String?
+  stripePromotionCodeId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
