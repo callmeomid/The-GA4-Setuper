@@ -31,6 +31,11 @@
           <p class="helper-text">Navigate your site normally — we'll catch every step.</p>
         </div>
 
+        <div id="template-picker" class="template-picker">
+          <div class="template-picker-label">OR START FROM A TEMPLATE</div>
+          <ol id="template-list" class="template-list"></ol>
+        </div>
+
         <div id="empty-state" class="empty-state">
           No steps yet. Click <strong>Start Recording</strong>, then click through your funnel like a visitor would.
         </div>
@@ -40,6 +45,25 @@
         <div class="footer-actions">
           <button id="reset-btn" class="btn btn-ghost">Reset</button>
           <button id="finish-btn" class="btn btn-accent" disabled>Finish &amp; Export</button>
+        </div>
+      </section>
+
+      <section id="confirm-view" class="view hidden">
+        <div class="confirm-header">
+          <button id="confirm-back-btn" class="btn btn-ghost btn-small">&larr; Choose a different template</button>
+          <p id="confirm-stat-line" class="confirm-stat-line"></p>
+          <p class="helper-text">
+            Each step below is pre-loaded with a real selector for this vertical. Confirm the ones that already
+            match your site, and pick the real element for any that don't.
+          </p>
+          <button id="confirm-all-matched-btn" class="btn btn-primary btn-small">Confirm all matched steps</button>
+        </div>
+
+        <ol id="confirm-step-list" class="confirm-step-list"></ol>
+
+        <div class="footer-actions">
+          <button id="confirm-reset-btn" class="btn btn-ghost">Reset</button>
+          <button id="confirm-finish-btn" class="btn btn-accent" disabled>Finish &amp; Export</button>
         </div>
       </section>
 
@@ -68,6 +92,7 @@
         </div>
       </section>
     </div>
+    <script src="../templates/templates.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

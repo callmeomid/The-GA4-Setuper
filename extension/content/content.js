@@ -134,6 +134,121 @@
     true,
   );
 
+  // --- Template confirm/adjust: live element picking + selector checking ---
+  // Lets the side panel ask "does this template selector already match
+  // something on the user's real page" (CHECK_SELECTOR) and "let the user
+  // click the real element for this step" (ENTER_PICK_MODE), independent of
+  // the recording arm/disarm state above.
+  let picking = null; // { stepId, triggerType } | null
+  let pickOverlay = null;
+
+  function ensurePickOverlay() {
+    if (pickOverlay) return pickOverlay;
+    const host = document.createElement('div');
+    host.style.all = 'initial';
+    host.style.position = 'fixed';
+    host.style.inset = '0';
+    host.style.zIndex = '2147483647';
+    host.style.pointerEvents = 'none';
+    (document.body || document.documentElement).appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const box = document.createElement('div');
+    box.style.position = 'fixed';
+    box.style.border = '1px solid #39FF88';
+    box.style.background = 'rgba(57, 255, 136, 0.12)';
+    box.style.transition = 'none';
+    box.style.display = 'none';
+    shadow.appendChild(box);
+    pickOverlay = { host, box };
+    return pickOverlay;
+  }
+
+  function pickTargetFor(rawTarget) {
+    if (picking && picking.triggerType === 'formSubmit') {
+      return rawTarget.closest ? rawTarget.closest('form') || rawTarget : rawTarget;
+    }
+    const path = [rawTarget];
+    let node = rawTarget;
+    while (node && node.parentElement && path.length < 8) {
+      node = node.parentElement;
+      path.push(node);
+    }
+    return findInteractiveAncestor(path) || rawTarget;
+  }
+
+  function onPickMouseMove(event) {
+    const { box } = ensurePickOverlay();
+    const target = pickTargetFor(event.target);
+    if (!target || target.nodeType !== 1) {
+      box.style.display = 'none';
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    box.style.display = 'block';
+    box.style.left = `${rect.left}px`;
+    box.style.top = `${rect.top}px`;
+    box.style.width = `${rect.width}px`;
+    box.style.height = `${rect.height}px`;
+  }
+
+  function onPickClick(event) {
+    if (!picking) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const target = pickTargetFor(event.target);
+    const { selector, confidence } = window.FunnelSelector.getStableSelector(target);
+    const label = window.FunnelSelector.getVisibleLabel(target);
+    chrome.runtime.sendMessage({
+      type: 'ELEMENT_PICKED',
+      stepId: picking.stepId,
+      selector,
+      confidence,
+      label,
+      urlPattern: window.FunnelUrlPattern.toUrlPattern(location.href),
+    });
+    exitPickMode();
+  }
+
+  function onPickKeydown(event) {
+    if (event.key === 'Escape') exitPickMode();
+  }
+
+  function enterPickMode(stepId, triggerType) {
+    exitPickMode();
+    picking = { stepId, triggerType };
+    document.addEventListener('mousemove', onPickMouseMove, true);
+    document.addEventListener('click', onPickClick, true);
+    document.addEventListener('keydown', onPickKeydown, true);
+    document.documentElement.style.cursor = 'crosshair';
+  }
+
+  function exitPickMode() {
+    if (!picking) return;
+    picking = null;
+    document.removeEventListener('mousemove', onPickMouseMove, true);
+    document.removeEventListener('click', onPickClick, true);
+    document.removeEventListener('keydown', onPickKeydown, true);
+    document.documentElement.style.cursor = '';
+    if (pickOverlay) pickOverlay.box.style.display = 'none';
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'ENTER_PICK_MODE') {
+      enterPickMode(message.stepId, message.triggerType);
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message.type === 'CHECK_SELECTOR') {
+      try {
+        const matches = message.selector ? document.querySelectorAll(message.selector) : [];
+        sendResponse({ ok: true, count: matches.length });
+      } catch (e) {
+        sendResponse({ ok: false, error: 'Invalid selector' });
+      }
+      return;
+    }
+  });
+
   function ensureToastHost() {
     if (toastHost) return toastHost;
     const host = document.createElement('div');

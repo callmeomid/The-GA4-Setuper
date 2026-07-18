@@ -1,4 +1,4 @@
-const DEFAULT_STATE = { recording: false, recordingOrigin: null, funnelName: '', steps: [] };
+const DEFAULT_STATE = { recording: false, recordingOrigin: null, funnelName: '', steps: [], mode: 'idle', templateId: null };
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get('funnelState', (data) => {
@@ -45,6 +45,30 @@ async function handleMessage(message, sender) {
         recordingOrigin: origin,
         funnelName: message.funnelName || state.funnelName,
         steps: [],
+        mode: 'recording',
+        templateId: null,
+      };
+      await setState(nextState);
+      return nextState;
+    }
+
+    case 'LOAD_TEMPLATE': {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const origin = tab && tab.url ? safeOrigin(tab.url) : null;
+      const steps = message.steps.map((step) => ({
+        id: generateId(),
+        confirmed: false,
+        origin: 'template',
+        ...step,
+      }));
+      const nextState = {
+        ...state,
+        recording: false,
+        recordingOrigin: origin,
+        funnelName: message.funnelName || state.funnelName,
+        steps,
+        mode: 'template',
+        templateId: message.templateId,
       };
       await setState(nextState);
       return nextState;
