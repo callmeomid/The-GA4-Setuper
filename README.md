@@ -117,7 +117,7 @@ If instead you see a raw error page or the terminal shows a crash, jump to Secti
 
 ## 6. How to test that it's actually working
 
-**One honest note first:** the Chrome extension's "Send" button currently does not attach your API key to the request, so clicking it will fail with a 401 error no matter what you type into the "backend URL" box. Until that's fixed in the code, use the extension to *record and export* a funnel (its "Copy JSON" button works fine), then send that JSON yourself with `curl` as shown below. This is the one thing in this README that's a workaround for a real gap in the current code, not a limitation of the instructions.
+**Extension setup:** the side panel's "SEND TO BACKEND" block has two fields — a backend URL and an API key. Point the URL field at `http://localhost:3000/api/funnels` (the actual API route, not the bare origin — `http://localhost:3000/` is a page route that 307-redirects to `/dashboard` and never reaches a handler). Paste your `apiKey` (see Test B, step 2, for how to find it) into the API key field. Both are remembered between sessions via `chrome.storage.local`. You can still use `curl` as shown below if you'd rather not sign in through the browser first.
 
 ### Test A — the ingestion API works (no Google account needed, ~2 minutes)
 
@@ -166,7 +166,7 @@ If step 9 succeeds and you can see the new trigger/tag sitting in an unpublished
 - **NextAuth prints `[next-auth][error][NO_SECRET]` or sign-in silently does nothing** — `NEXTAUTH_SECRET` is missing or empty in `.env.local`. Generate one with `openssl rand -base64 32`.
 - **`The table 'main.User' does not exist in the current database`** (or similar Prisma table-not-found errors) — you skipped `npx prisma migrate dev`. Run it, then restart `npm run dev`.
 - **Google shows `Error 400: redirect_uri_mismatch` when you click Sign in with Google** — the redirect URIs on your OAuth client in Google Cloud Console don't exactly match what the app is requesting. Double-check both `http://localhost:3000/api/auth/callback/google` and `http://localhost:3000/api/gtm/callback` are listed, character for character (no trailing slash).
-- **`{"error":"Missing or invalid Authorization: Bearer <apiKey> header"}`** — you're POSTing to `/api/funnels` without the header, or with the wrong key. This is also what you'll get if you click "Send" in the extension itself (see Section 6's note) — use `curl` with the header instead.
+- **`{"error":"Missing or invalid Authorization: Bearer <apiKey> header"}`** — you're POSTing to `/api/funnels` without the header, or with the wrong key. In the extension, check the API key field in the "SEND TO BACKEND" block is filled in with your real `apiKey` from Prisma Studio.
 - **GTM setup page shows an error message with a "Go to Settings" link** — you haven't connected Google Tag Manager yet, or the connection expired. Go to Settings and click Connect Google Tag Manager.
 - **`Tag Manager API has not been used in project ... or it is disabled`** — you created the OAuth client but never flipped on the API itself. Go to Google Cloud Console → APIs & Services → Library → search "Tag Manager API" → Enable.
 

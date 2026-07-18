@@ -170,12 +170,16 @@ function showRecorderView() {
   document.getElementById('recorder-view').classList.remove('hidden');
 }
 
-async function sendFunnelSpec(url, spec) {
+async function sendFunnelSpec(url, apiKey, spec) {
   if (!url) return { ok: false, error: 'Enter a backend URL first' };
+  if (!apiKey) return { ok: false, error: 'Enter your API key first' };
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(spec),
     });
     return { ok: res.ok, status: res.status };
@@ -219,12 +223,21 @@ document.getElementById('copy-btn').addEventListener('click', async () => {
   }, 1500);
 });
 
+document.getElementById('backend-url').addEventListener('blur', (e) => {
+  chrome.storage.local.set({ backendUrl: e.target.value.trim() });
+});
+
+document.getElementById('api-key').addEventListener('blur', (e) => {
+  chrome.storage.local.set({ backendApiKey: e.target.value.trim() });
+});
+
 document.getElementById('send-btn').addEventListener('click', async () => {
   const url = document.getElementById('backend-url').value.trim();
+  const apiKey = document.getElementById('api-key').value.trim();
   const resultEl = document.getElementById('send-result');
   resultEl.className = 'send-result';
   resultEl.textContent = 'Sending…';
-  const result = await sendFunnelSpec(url, buildExportSpec());
+  const result = await sendFunnelSpec(url, apiKey, buildExportSpec());
   if (result.ok) {
     resultEl.className = 'send-result ok';
     resultEl.textContent = `Sent — server responded ${result.status}`;
@@ -245,4 +258,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   state = await sendMessage({ type: 'GET_STATE' });
   state.steps.forEach((s) => renderedIds.add(s.id));
   render();
+
+  const stored = await new Promise((resolve) =>
+    chrome.storage.local.get(['backendUrl', 'backendApiKey'], resolve)
+  );
+  if (stored.backendUrl) document.getElementById('backend-url').value = stored.backendUrl;
+  if (stored.backendApiKey) document.getElementById('api-key').value = stored.backendApiKey;
 })();

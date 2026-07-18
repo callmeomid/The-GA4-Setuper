@@ -23,6 +23,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 });
   }
 
+  console.log('[POST /api/funnels] parsed body:', JSON.stringify(body, null, 2));
+
   const parsed = FunnelSpecSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Funnel spec failed validation', issues: parsed.error.issues }, { status: 400 });

@@ -61,9 +61,10 @@
         <div class="send-block">
           <label class="export-label">SEND TO BACKEND</label>
           <div class="send-row">
-            <input id="backend-url" class="backend-url-input" type="url" placeholder="https://your-backend.example.com/funnels" />
+            <input id="backend-url" class="backend-url-input" type="url" placeholder="https://your-backend.example.com/api/funnels" />
             <button id="send-btn" class="btn btn-primary btn-small">Send</button>
           </div>
+          <input id="api-key" class="backend-url-input" type="password" placeholder="API key (from Prisma Studio → User.apiKey)" autocomplete="off" />
           <div id="send-result" class="send-result"></div>
         </div>
       </section>
