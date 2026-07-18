@@ -47,6 +47,7 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
   const [pushing, setPushing] = useState(false);
   const [pushResult, setPushResult] = useState<PushResult | null>(null);
   const [pushError, setPushError] = useState('');
+  const [upgradeUrl, setUpgradeUrl] = useState('');
 
   useEffect(() => {
     fetch(`/api/funnels/${params.id}/gtm-plan`)
@@ -64,6 +65,7 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
   async function push() {
     setPushing(true);
     setPushError('');
+    setUpgradeUrl('');
     try {
       const res = await fetch(`/api/funnels/${params.id}/gtm-push`, {
         method: 'POST',
@@ -71,8 +73,12 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({ ga4MeasurementId: measurementId || undefined, eventNameOverrides }),
       });
       const data = await res.json();
-      if (!res.ok) setPushError(data.error ?? 'Push failed.');
-      else setPushResult(data);
+      if (!res.ok) {
+        setPushError(data.error ?? 'Push failed.');
+        if (res.status === 402) setUpgradeUrl(data.upgradeUrl ?? '/settings#billing');
+      } else {
+        setPushResult(data);
+      }
     } catch {
       setPushError('Push failed — network error.');
     } finally {
@@ -209,7 +215,16 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
             })}
           </div>
 
-          {pushError && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 12 }}>{pushError}</div>}
+          {pushError && !upgradeUrl && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 12 }}>{pushError}</div>}
+
+          {upgradeUrl && (
+            <div style={{ border: '1px solid var(--amber, #ffb84d)', borderRadius: 2, padding: 14, marginTop: 12 }}>
+              <p style={{ fontSize: 12.5, color: 'var(--amber, #ffb84d)', margin: '0 0 10px' }}>{pushError}</p>
+              <Link href={upgradeUrl} className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                Upgrade plan →
+              </Link>
+            </div>
+          )}
 
           <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-accent" disabled={pushing || (Boolean(plan.blockedReason) && !measurementId)} onClick={push}>

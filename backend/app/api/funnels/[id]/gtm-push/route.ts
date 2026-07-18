@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
+import { assertCanPushFunnel, BillingLimitError, refundPushClaimOnFailure } from '@/lib/billing/limits';
 import { createTag, createTrigger } from '@/lib/gtm/api';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
@@ -24,9 +25,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const overrideMeasurementId: string | undefined = body?.ga4MeasurementId;
   const eventNameOverrides: Record<string, string> = body?.eventNameOverrides ?? {};
 
+  // Set once assertCanPushFunnel succeeds below, so the catch block knows
+  // whether a slot was claimed on this request and needs refunding on total
+  // failure. Stays undefined if the billing check itself is what threw —
+  // in that case nothing was ever claimed, so there's nothing to refund.
+  let claim: { claimedNewSlot: boolean } | undefined;
+
   try {
     const funnel = await loadFunnelForGtm(userId, params.id);
     const connection = await loadGtmConnection(userId);
+
+    // Checked (and, if this is the funnel's first push, claimed) before any
+    // GTM API call is made — a block here means zero writes happen, so there's
+    // no partial push to unwind.
+    claim = await assertCanPushFunnel(userId, funnel.id);
 
     if (overrideMeasurementId) {
       await prisma.funnel.update({ where: { id: funnel.id }, data: { ga4MeasurementId: overrideMeasurementId } });
@@ -60,6 +72,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
     );
 
     if (plan.blockedReason) {
+      // No trigger/tag was ever created — refund the claimed slot rather than
+      // charging the user for a push that never reached GTM.
+      await refundPushClaimOnFailure(funnel.id, claim.claimedNewSlot);
       return NextResponse.json({ error: plan.blockedReason }, { status: 400 });
     }
 
@@ -154,6 +169,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     return NextResponse.json({ results, ga4ConfigTagName, workspaceUrl });
   } catch (err) {
+    if (err instanceof BillingLimitError) {
+      return NextResponse.json({ error: err.message, upgradeUrl: err.upgradeUrl }, { status: err.status });
+    }
+    // A claimed slot only counts once real GTM writes happened (past the
+    // blockedReason check above). Anything that throws before then — a
+    // connection error, the workspace call itself failing — never touched
+    // GTM, so give the slot back.
+    if (claim) await refundPushClaimOnFailure(params.id, claim.claimedNewSlot).catch(() => {});
     if (err instanceof SetupError) return NextResponse.json({ error: err.message }, { status: err.status });
     const plainEnglish = (err as { plainEnglish?: string }).plainEnglish;
     const message = plainEnglish ?? (err instanceof Error ? err.message : 'Unknown error');
