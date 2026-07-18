@@ -114,12 +114,21 @@ model Funnel {
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
 
-  // Set the first time this funnel is successfully pushed to GTM — this is what
-  // counts against the plan's funnel-push cap (see lib/billing/limits.ts), not
-  // funnel creation. Null means "never pushed, doesn't count yet." Once set it's
-  // never cleared by a plan downgrade — only a fully-failed push (no GTM writes
-  // made at all) rolls it back, since that push never actually consumed a slot.
-  firstPushedAt DateTime?
+  // Chosen after approval, before any API calls: null | "client" | "server".
+  // Null routes the funnel page to the decision step instead of GTM setup.
+  // Switching an existing "client" funnel to "server" later is how the
+  // upgrade path works — see lib/stape/setup.ts and plan.ts's 'upgrade'
+  // outcome, which detects and edits the GA4 config tag this app already
+  // created instead of creating a duplicate.
+  setupMode String?
+
+  // Populated only once setupMode is "server" and Stape setup has run.
+  stapeContainerId     String?
+  stapeSubdomain       String?
+  stapeContainerUrl    String?
+  // "pending" | "created" | "healthy" | "unreachable"
+  stapeContainerStatus String  @default("pending")
+  stapeCookieName      String?
 
   gtmApiLogs GtmApiLog[]
 }

@@ -1,11 +1,12 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
-import { assertCanPushFunnel, BillingLimitError, refundPushClaimOnFailure } from '@/lib/billing/limits';
-import { createTag, createTrigger } from '@/lib/gtm/api';
+import { createTag, createTrigger, updateTag } from '@/lib/gtm/api';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
-import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
+import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource, mergeServerContainerUrl } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
+import { ensureStapeContainer } from '@/lib/stape/setup';
+import { StapeError } from '@/lib/stape/client';
 import { prisma } from '@/lib/prisma';
 
 type StepResult = {
@@ -24,6 +25,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const body = await request.json().catch(() => ({}));
   const overrideMeasurementId: string | undefined = body?.ga4MeasurementId;
   const eventNameOverrides: Record<string, string> = body?.eventNameOverrides ?? {};
+  const stapeSubdomain: string | undefined = body?.stapeSubdomain;
+  const stapeCookieName: string = body?.stapeCookieName || 'stape_fpid';
 
   // Set once assertCanPushFunnel succeeds below, so the catch block knows
   // whether a slot was claimed on this request and needs refunding on total
@@ -33,6 +36,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   try {
     const funnel = await loadFunnelForGtm(userId, params.id);
+    const setupMode = funnel.setupMode as 'client' | 'server';
     const connection = await loadGtmConnection(userId);
 
     // Checked (and, if this is the funnel's first push, claimed) before any
@@ -51,8 +55,37 @@ export async function POST(request: Request, { params }: { params: { id: string 
       if (step) step.ga4EventName = eventName;
     }
 
+    // Server mode provisions (or reuses) the Stape container before anything
+    // GTM-side, since the GA4 Configuration tag's transport URL depends on
+    // the container's domain.
+    let serverContainerUrl: string | null = null;
+    if (setupMode === 'server') {
+      if (!stapeSubdomain) {
+        return NextResponse.json({ error: 'Enter the subdomain your server container will run on before pushing.' }, { status: 400 });
+      }
+      try {
+        const container = await ensureStapeContainer(
+          funnel.id,
+          { stapeContainerId: funnel.stapeContainerId, stapeSubdomain: funnel.stapeSubdomain },
+          stapeSubdomain,
+          stapeCookieName,
+          funnel.name,
+        );
+        serverContainerUrl = container.url;
+      } catch (err) {
+        if (err instanceof StapeError) return NextResponse.json({ error: err.plainEnglish }, { status: 502 });
+        throw err;
+      }
+    }
+
     const ctx = { userId, funnelId: funnel.id };
-    const { workspacePath, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection);
+    const { workspacePath, snapshot } = await prepareWorkspaceAndSnapshot(
+      userId,
+      funnel.id,
+      funnel.name,
+      connection,
+      funnel.ga4ConfigTagName,
+    );
 
     const plan = buildFunnelPlan(
       funnel.name,
@@ -69,6 +102,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       })),
       snapshot,
       funnel.ga4MeasurementId,
+      setupMode,
     );
 
     if (plan.blockedReason) {
@@ -78,8 +112,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: plan.blockedReason }, { status: 400 });
     }
 
-    // Resolve (or create) the shared GA4 Configuration tag every event tag
-    // will reference by name.
+    // Resolve (or create, or upgrade) the shared GA4 Configuration tag every
+    // event tag will reference by name.
     let ga4ConfigTagName = plan.ga4Config.tagName;
     if (plan.ga4Config.outcome === 'new') {
       let allPagesTrigger = snapshot.existingTriggers.find((t) => t.name === 'All Pages');
@@ -92,9 +126,19 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ctx,
         connection.refreshToken,
         workspacePath,
-        buildGa4ConfigTagResource(ga4ConfigTagName, plan.ga4Config.measurementId!, allPagesTriggerId!),
+        buildGa4ConfigTagResource(ga4ConfigTagName, plan.ga4Config.measurementId!, allPagesTriggerId!, serverContainerUrl),
       );
       ga4ConfigTagName = configTag.name!;
+    } else if (plan.ga4Config.outcome === 'upgrade' && plan.ga4Config.tagId && snapshot.draftGa4ConfigTag && serverContainerUrl) {
+      // Edits the tag this app created on a previous (client-side) run in
+      // place — same tag id, same firing trigger, just adds transport.
+      await updateTag(
+        ctx,
+        connection.refreshToken,
+        workspacePath,
+        plan.ga4Config.tagId,
+        mergeServerContainerUrl(snapshot.draftGa4ConfigTag.raw, serverContainerUrl),
+      );
     }
     await prisma.funnel.update({ where: { id: funnel.id }, data: { ga4ConfigTagName } });
 
@@ -146,6 +190,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
               ga4EventName: stepPlan.eventName,
               gtmStatus: 'created',
               ga4Status: 'created',
+              stapeStatus: setupMode === 'server' ? 'created' : 'pending',
             },
           });
         }
@@ -167,7 +212,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ? `https://tagmanager.google.com/#/container/accounts/${connection.gtmAccountId}/containers/${connection.gtmContainerId}/workspaces/${funnel.gtmWorkspaceId}`
       : 'https://tagmanager.google.com/';
 
-    return NextResponse.json({ results, ga4ConfigTagName, workspaceUrl });
+    return NextResponse.json({
+      results,
+      ga4ConfigTagName,
+      workspaceUrl,
+      stapeContainerUrl: serverContainerUrl,
+    });
   } catch (err) {
     if (err instanceof BillingLimitError) {
       return NextResponse.json({ error: err.message, upgradeUrl: err.upgradeUrl }, { status: err.status });

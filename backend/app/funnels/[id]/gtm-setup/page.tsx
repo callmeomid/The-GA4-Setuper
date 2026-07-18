@@ -15,19 +15,29 @@ type StepPlan = {
 };
 type Plan = {
   workspaceName: string;
-  ga4Config: { outcome: 'new' | 'reuse'; tagName: string; measurementId: string | null };
+  setupMode: 'client' | 'server';
+  ga4Config: { outcome: 'new' | 'reuse' | 'upgrade'; tagName: string; measurementId: string | null; description: string };
   steps: StepPlan[];
   blockedReason: string | null;
 };
+type StapeInfo = { subdomain: string | null; containerUrl: string | null; status: string } | null;
 type TechnicalStep = { stepId: string; triggerResource: unknown; tagResource: unknown };
 type PushResult = {
   results: { stepId: string; label: string; trigger: string; tag: string; error?: string }[];
   ga4ConfigTagName: string;
   workspaceUrl: string;
+  stapeContainerUrl: string | null;
 };
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
-  const color = outcome === 'conflict' || outcome === 'error' ? 'var(--danger)' : outcome === 'new' ? 'var(--accent)' : 'var(--line-secondary)';
+  const color =
+    outcome === 'conflict' || outcome === 'error'
+      ? 'var(--danger)'
+      : outcome === 'new'
+        ? 'var(--accent)'
+        : outcome === 'upgrade'
+          ? 'var(--amber)'
+          : 'var(--line-secondary)';
   return (
     <span
       className="mono"
@@ -40,9 +50,11 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
 
 export default function GtmSetupPage({ params }: { params: { id: string } }) {
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [stape, setStape] = useState<StapeInfo>(null);
   const [technical, setTechnical] = useState<TechnicalStep[]>([]);
   const [loadError, setLoadError] = useState('');
   const [measurementId, setMeasurementId] = useState('');
+  const [subdomain, setSubdomain] = useState('');
   const [eventNameOverrides, setEventNameOverrides] = useState<Record<string, string>>({});
   const [pushing, setPushing] = useState(false);
   const [pushResult, setPushResult] = useState<PushResult | null>(null);
@@ -57,10 +69,15 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
         else {
           setPlan(data.plan);
           setTechnical(data.technicalSteps ?? []);
+          setStape(data.stape ?? null);
+          if (data.stape?.subdomain) setSubdomain(data.stape.subdomain);
         }
       })
       .catch(() => setLoadError('Could not load the GTM setup plan.'));
   }, [params.id]);
+
+  const isServerMode = plan?.setupMode === 'server';
+  const needsSubdomain = isServerMode && !subdomain;
 
   async function push() {
     setPushing(true);
@@ -70,7 +87,11 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
       const res = await fetch(`/api/funnels/${params.id}/gtm-push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ga4MeasurementId: measurementId || undefined, eventNameOverrides }),
+        body: JSON.stringify({
+          ga4MeasurementId: measurementId || undefined,
+          eventNameOverrides,
+          stapeSubdomain: isServerMode ? subdomain : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -97,10 +118,28 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
         </Link>
       </div>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginTop: 16, marginBottom: 4 }}>Set up in Google Tag Manager</h1>
-      <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 0, marginBottom: 20 }}>
+      <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 0, marginBottom: 8 }}>
         Everything below is written to a draft workspace only. Nothing is published automatically — you review and
         publish from GTM yourself.
       </p>
+      {plan && (
+        <div
+          className="mono"
+          style={{
+            display: 'inline-block',
+            fontSize: 10,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: isServerMode ? 'var(--amber)' : 'var(--accent)',
+            border: `1px solid ${isServerMode ? 'var(--amber)' : 'var(--accent)'}`,
+            borderRadius: 2,
+            padding: '3px 8px',
+            marginBottom: 20,
+          }}
+        >
+          {isServerMode ? 'Server-side · GTM + GA4 + Stape.io' : 'Client-side · GTM + GA4'}
+        </div>
+      )}
 
       {loadError && (
         <div style={{ border: '1px solid var(--danger)', borderRadius: 2, padding: 14, fontSize: 13, color: 'var(--danger)' }}>
@@ -119,29 +158,54 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
             Workspace: {plan.workspaceName}
           </div>
 
-          <div style={{ border: '1px solid var(--line-ghost)', borderRadius: 2, padding: 14, marginBottom: 16 }}>
+          {isServerMode && (
+            <div style={{ border: '1px solid var(--amber)', borderRadius: 2, padding: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontSize: 13 }}>Stape.io server container</span>
+                <span
+                  className="mono"
+                  style={{ fontSize: 9, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--amber)', border: '1px solid var(--amber)', borderRadius: 2, padding: '2px 6px' }}
+                >
+                  {stape?.status === 'created' ? 'ready' : 'setup required'}
+                </span>
+              </div>
+              <p style={{ fontSize: 12.5, color: 'var(--line-secondary)', margin: '0 0 8px' }}>
+                {stape?.containerUrl
+                  ? `Container is live at ${stape.containerUrl}. Re-pushing reuses it — it won't create a second one.`
+                  : "Not created yet. Point this subdomain's CNAME at Stape before pushing so the container can go live."}
+              </p>
+              <input
+                value={subdomain}
+                onChange={(e) => setSubdomain(e.target.value)}
+                placeholder="gtm.yoursite.com"
+                className="mono"
+                style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2, width: '100%' }}
+              />
+            </div>
+          )}
+
+          <div style={{ border: `1px solid ${plan.ga4Config.outcome === 'upgrade' ? 'var(--amber)' : 'var(--line-ghost)'}`, borderRadius: 2, padding: 14, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={{ fontSize: 13 }}>GA4 Configuration</span>
               <OutcomeBadge outcome={plan.ga4Config.outcome} />
             </div>
-            {plan.ga4Config.outcome === 'reuse' ? (
-              <p style={{ fontSize: 12.5, color: 'var(--line-secondary)', margin: 0 }}>
-                Found an existing GA4 Configuration tag live in this container — reusing it (measurement ID{' '}
-                <span className="mono">{plan.ga4Config.measurementId}</span>) instead of creating a duplicate.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <p style={{ fontSize: 12.5, color: 'var(--line-secondary)', margin: 0 }}>
-                  No GA4 Configuration tag found live in this container — we'll create one.
-                </p>
-                <input
-                  value={measurementId}
-                  onChange={(e) => setMeasurementId(e.target.value)}
-                  placeholder="G-XXXXXXX"
-                  className="mono"
-                  style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2 }}
-                />
-              </div>
+            <p style={{ fontSize: 12.5, color: 'var(--line-secondary)', margin: plan.ga4Config.outcome === 'new' ? '0 0 8px' : 0 }}>
+              {plan.ga4Config.description}
+              {plan.ga4Config.outcome !== 'new' && plan.ga4Config.measurementId && (
+                <>
+                  {' '}
+                  (measurement ID <span className="mono">{plan.ga4Config.measurementId}</span>)
+                </>
+              )}
+            </p>
+            {plan.ga4Config.outcome === 'new' && (
+              <input
+                value={measurementId}
+                onChange={(e) => setMeasurementId(e.target.value)}
+                placeholder="G-XXXXXXX"
+                className="mono"
+                style={{ background: 'var(--bg)', color: 'var(--line-primary)', border: '1px solid var(--line-ghost)', padding: 8, borderRadius: 2, width: '100%' }}
+              />
             )}
           </div>
 
@@ -227,7 +291,11 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
           )}
 
           <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-accent" disabled={pushing || (Boolean(plan.blockedReason) && !measurementId)} onClick={push}>
+            <button
+              className="btn btn-accent"
+              disabled={pushing || (Boolean(plan.blockedReason) && !measurementId) || needsSubdomain}
+              onClick={push}
+            >
               {pushing ? 'Pushing…' : 'Push to GTM (draft only)'}
             </button>
           </div>
@@ -250,9 +318,19 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
             <p style={{ fontSize: 13, color: 'var(--accent)', margin: '0 0 8px' }}>
               ✓ Draft written to your workspace. Nothing has been published.
             </p>
-            <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              Open Google Tag Manager to review &amp; publish →
-            </a>
+            {pushResult.stapeContainerUrl && (
+              <p style={{ fontSize: 12, color: 'var(--line-secondary)', margin: '0 0 8px' }}>
+                Server container: <span className="mono">{pushResult.stapeContainerUrl}</span>
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                Open Google Tag Manager to review &amp; publish →
+              </a>
+              <Link href={`/funnels/${params.id}/validate`} className="btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                Validate in GA4 →
+              </Link>
+            </div>
           </div>
         </div>
       )}

@@ -68,7 +68,7 @@ function Connector({ solid }: { solid: boolean }) {
   );
 }
 
-export function FlowDiagram({ steps, approved }: { steps: Step[]; approved: boolean }) {
+export function FlowDiagram({ steps, approved, setupMode }: { steps: Step[]; approved: boolean; setupMode: 'client' | 'server' | null }) {
   return (
     <div
       className="dot-grid"
@@ -146,7 +146,7 @@ export function FlowDiagram({ steps, approved }: { steps: Step[]; approved: bool
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--line-ghost)' }}>
                 <PendingPill system="GTM" status={step.gtmStatus} />
                 <PendingPill system="GA4" status={step.ga4Status} />
-                <PendingPill system="Stape" status={step.stapeStatus} />
+                {setupMode === 'server' && <PendingPill system="Stape" status={step.stapeStatus} />}
               </div>
             </div>
             {index < steps.length - 1 && <Connector solid={approved} />}
