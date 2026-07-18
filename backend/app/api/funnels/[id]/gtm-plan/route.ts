@@ -13,8 +13,15 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
   try {
     const funnel = await loadFunnelForGtm(userId, params.id);
+    const setupMode = funnel.setupMode as 'client' | 'server';
     const connection = await loadGtmConnection(userId);
-    const { workspace, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection);
+    const { workspace, snapshot } = await prepareWorkspaceAndSnapshot(
+      userId,
+      funnel.id,
+      funnel.name,
+      connection,
+      funnel.ga4ConfigTagName,
+    );
 
     if (workspace.workspaceId && workspace.workspaceId !== funnel.gtmWorkspaceId) {
       await prisma.funnel.update({ where: { id: funnel.id }, data: { gtmWorkspaceId: workspace.workspaceId } });
@@ -35,7 +42,19 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       })),
       snapshot,
       funnel.ga4MeasurementId,
+      setupMode,
     );
+
+    // Only present for server mode — the client-side preview omits this
+    // section entirely rather than rendering it blank.
+    const stape =
+      setupMode === 'server'
+        ? {
+            subdomain: funnel.stapeSubdomain,
+            containerUrl: funnel.stapeContainerUrl,
+            status: funnel.stapeContainerStatus,
+          }
+        : null;
 
     // Technical detail shown only in the preview's collapsed "technical
     // details" panel — computed with the same builder functions push uses,
@@ -51,10 +70,10 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     });
     const ga4ConfigResource =
       plan.ga4Config.outcome === 'new' && plan.ga4Config.measurementId
-        ? buildGa4ConfigTagResource(plan.ga4Config.tagName, plan.ga4Config.measurementId, '<all-pages-trigger-id>')
+        ? buildGa4ConfigTagResource(plan.ga4Config.tagName, plan.ga4Config.measurementId, '<all-pages-trigger-id>', stape?.containerUrl ?? null)
         : null;
 
-    return NextResponse.json({ plan, technicalSteps, ga4ConfigResource });
+    return NextResponse.json({ plan, technicalSteps, ga4ConfigResource, stape });
   } catch (err) {
     if (err instanceof SetupError) return NextResponse.json({ error: err.message }, { status: err.status });
     const plainEnglish = (err as { plainEnglish?: string }).plainEnglish;

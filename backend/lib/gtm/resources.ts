@@ -129,11 +129,38 @@ export function buildTagResource(
   };
 }
 
-export function buildGa4ConfigTagResource(tagName: string, measurementId: string, triggerId: string): tagmanager_v2.Schema$Tag {
+// Transport is set once on the GA4 Configuration tag and inherited by every
+// event tag that references it (via the tagReference `measurementId`
+// parameter) — so routing through a server container only ever touches this
+// one tag, never the per-step event tags in resources/plan.
+function transportParameters(serverContainerUrl: string | null): tagmanager_v2.Schema$Parameter[] {
+  if (!serverContainerUrl) return [];
+  return [
+    { type: 'boolean', key: 'useTransportUrl', value: 'true' },
+    { type: 'template', key: 'transportUrl', value: serverContainerUrl },
+  ];
+}
+
+export function buildGa4ConfigTagResource(
+  tagName: string,
+  measurementId: string,
+  triggerId: string,
+  serverContainerUrl: string | null = null,
+): tagmanager_v2.Schema$Tag {
   return {
     name: tagName,
     type: 'gaawc',
-    parameter: [{ type: 'template', key: 'measurementId', value: measurementId }],
+    parameter: [{ type: 'template', key: 'measurementId', value: measurementId }, ...transportParameters(serverContainerUrl)],
     firingTriggerId: [triggerId],
   };
+}
+
+// Used on the *upgrade* path: an existing GA4 Configuration tag this app
+// created for a client-side setup gets its transport parameters added in
+// place, everything else (name, firingTriggerId, other parameters) untouched
+// — so tags.update can't accidentally clobber something the user edited by
+// hand in GTM since the last run.
+export function mergeServerContainerUrl(tag: tagmanager_v2.Schema$Tag, serverContainerUrl: string): tagmanager_v2.Schema$Tag {
+  const withoutTransport = (tag.parameter ?? []).filter((p) => p.key !== 'useTransportUrl' && p.key !== 'transportUrl');
+  return { ...tag, parameter: [...withoutTransport, ...transportParameters(serverContainerUrl)] };
 }
