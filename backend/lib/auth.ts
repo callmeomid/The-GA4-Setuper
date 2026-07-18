@@ -8,6 +8,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Database sessions (not JWT) so they're revocable and can be seeded directly
   // in Prisma for local testing without going through the Google OAuth redirect.
   session: { strategy: 'database' },
+  secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
