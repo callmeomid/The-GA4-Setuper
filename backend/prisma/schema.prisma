@@ -99,20 +99,31 @@ model Funnel {
   // we created, or an existing one we found and reused (see lib/gtm/plan.ts).
   ga4ConfigTagName String?
 
-  gtmApiLogs GtmApiLog[]
+  apiLogs      IntegrationApiLog[]
+  pushAttempts PushAttempt[]
 }
 
-// Persisted (not just console.log'd) so every GTM API call made on behalf of
-// this funnel stays inspectable after the fact for debugging.
-model GtmApiLog {
+// Persisted (not just console.log'd) so every third-party API call made on
+// behalf of this funnel stays inspectable after the fact for debugging.
+// Provider-generic on purpose: GTM is the only integration that makes real
+// calls today, but GA4 (Admin API) and Stape calls will flow through the same
+// table via `provider` once those integrations exist, instead of each one
+// growing its own copy of this model.
+model IntegrationApiLog {
   id       String  @id @default(cuid())
+  // "gtm" | "ga4" | "stape"
+  provider String  @default("gtm")
   // Nullable: some calls (listing accounts/containers while connecting GTM)
   // happen before a funnel is in scope. Push-execution calls always set this.
   funnelId String?
   funnel   Funnel? @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   // Plain field, not a relation — this is transient debug data, not something
   // we need referential integrity on.
-  userId         String?
+  userId String?
+  // Groups every call made during one gtm-push execution, so the ops
+  // dashboard and rollback logic can reconstruct "what did this run touch"
+  // without re-deriving it from timestamps.
+  runId          String?
   method         String
   endpoint       String
   requestBody    String?
@@ -123,6 +134,38 @@ model GtmApiLog {
   createdAt      DateTime @default(now())
 
   @@index([funnelId, createdAt])
+  @@index([runId])
+  @@index([provider, createdAt])
+}
+
+// One row per gtm-push execution. GtmApiLog/IntegrationApiLog captures every
+// individual call; this captures the outcome of the run as a whole, which is
+// what "recent setup attempts" and "funnels stuck in partial state" actually
+// need to query — deriving that from raw call logs on every dashboard load
+// would mean re-running the same aggregation logic that already lives in the
+// push route.
+model PushAttempt {
+  id       String @id @default(cuid())
+  runId    String @unique
+  funnelId String
+  funnel   Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  userId   String
+
+  // "success" (every step created/reused) | "partial" (some steps errored,
+  // some didn't — the dangerous state, since the workspace is neither clean
+  // nor complete) | "failed" (blocked before any step ran, or every step
+  // errored)
+  outcome      String
+  stepsTotal   Int
+  stepsOk      Int
+  stepsError   Int
+  errorSummary String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([funnelId, startedAt])
+  @@index([outcome, startedAt])
 }
 
 model FunnelStep {

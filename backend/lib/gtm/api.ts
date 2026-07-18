@@ -89,6 +89,18 @@ export async function createTag(ctx: GtmCallContext, refreshToken: string, works
   );
 }
 
+// The rollback path for a half-completed push: since every mutation this app
+// makes lives in one dedicated per-funnel workspace and nothing else in the
+// container is ever touched, deleting that one workspace undoes the entire
+// run in a single call — no need to reverse individual trigger/tag creates.
+export async function deleteWorkspace(ctx: GtmCallContext, refreshToken: string, workspacePath: string) {
+  const tagmanager = getTagmanagerClient(refreshToken);
+  await callGtmLogged(ctx, 'DELETE', 'workspaces.delete', { path: workspacePath }, async () => {
+    await tagmanager.accounts.containers.workspaces.delete({ path: workspacePath });
+    return { data: null, status: 204 };
+  });
+}
+
 // Checked against the *live published version*, not our draft workspace —
 // this is how we find an existing GA4 Configuration tag to reuse instead of
 // creating a duplicate that would double-fire pageviews. A container that's

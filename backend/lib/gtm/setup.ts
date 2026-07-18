@@ -46,8 +46,9 @@ export async function prepareWorkspaceAndSnapshot(
   funnelId: string,
   funnelName: string,
   connection: { refreshToken: string; gtmAccountId: string; gtmContainerId: string },
+  runId?: string,
 ) {
-  const ctx = { userId, funnelId };
+  const ctx = { userId, funnelId, runId };
   const workspaceName = `Funnel Setuper: ${funnelName}`;
   const workspace = await getOrCreateWorkspace(
     ctx,

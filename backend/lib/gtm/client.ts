@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { logError } from '@/lib/log';
 import { prisma } from '@/lib/prisma';
 import { gtmClientFromRefreshToken } from './oauth';
 
@@ -45,11 +46,16 @@ function truncate(value: unknown, max = 4000): string {
   return s.length > max ? `${s.slice(0, max)}… (truncated)` : s;
 }
 
-export type GtmCallContext = { funnelId?: string; userId?: string };
+// runId groups every call made during one gtm-push execution (see
+// app/api/funnels/[id]/gtm-push/route.ts) so the ops dashboard and the
+// rollback path can answer "what did this run touch" directly from
+// IntegrationApiLog instead of re-deriving it from timestamps.
+export type GtmCallContext = { funnelId?: string; userId?: string; runId?: string };
 
 // Every GTM API call in this app goes through here, so every call — success
-// or failure — leaves a row in GtmApiLog with the request, response, status,
-// and duration. Nothing calls the raw client directly.
+// or failure — leaves a row in IntegrationApiLog with the request, response,
+// status, and duration, and every failure also reaches Sentry with that same
+// context attached. Nothing calls the raw client directly.
 export async function callGtmLogged<T>(
   context: GtmCallContext,
   method: string,
@@ -60,10 +66,12 @@ export async function callGtmLogged<T>(
   const start = Date.now();
   try {
     const res = await fn();
-    await prisma.gtmApiLog.create({
+    await prisma.integrationApiLog.create({
       data: {
+        provider: 'gtm',
         funnelId: context.funnelId ?? null,
         userId: context.userId ?? null,
+        runId: context.runId ?? null,
         method,
         endpoint,
         requestBody: truncate(requestBody),
@@ -75,10 +83,12 @@ export async function callGtmLogged<T>(
     return res.data;
   } catch (err) {
     const translated = translateError(err);
-    await prisma.gtmApiLog.create({
+    await prisma.integrationApiLog.create({
       data: {
+        provider: 'gtm',
         funnelId: context.funnelId ?? null,
         userId: context.userId ?? null,
+        runId: context.runId ?? null,
         method,
         endpoint,
         requestBody: truncate(requestBody),
@@ -86,6 +96,15 @@ export async function callGtmLogged<T>(
         errorMessage: truncate(translated.message),
         durationMs: Date.now() - start,
       },
+    });
+    logError(`GTM API call failed: ${method} ${endpoint}`, translated, {
+      provider: 'gtm',
+      method,
+      endpoint,
+      status: translated.status,
+      funnelId: context.funnelId,
+      userId: context.userId,
+      runId: context.runId,
     });
     throw translated;
   }

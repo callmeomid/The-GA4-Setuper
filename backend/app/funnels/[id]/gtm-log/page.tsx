@@ -12,7 +12,7 @@ export default async function GtmLogPage({ params }: { params: { id: string } })
   const funnel = await prisma.funnel.findUnique({ where: { id: params.id } });
   if (!funnel || funnel.ownerId !== userId) notFound();
 
-  const logs = await prisma.gtmApiLog.findMany({
+  const logs = await prisma.integrationApiLog.findMany({
     where: { funnelId: params.id },
     orderBy: { createdAt: 'desc' },
     take: 200,

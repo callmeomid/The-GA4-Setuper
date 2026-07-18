@@ -1,3 +1,5 @@
+importScripts('lib/log.js');
+
 const DEFAULT_STATE = { recording: false, recordingOrigin: null, funnelName: '', steps: [] };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -88,6 +90,11 @@ async function handleMessage(message, sender) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  handleMessage(message, sender)
+    .catch((err) => {
+      FunnelLog.error('background message handler threw', { type: message && message.type, error: String(err && err.message) });
+      return getState();
+    })
+    .then(sendResponse);
   return true;
 });

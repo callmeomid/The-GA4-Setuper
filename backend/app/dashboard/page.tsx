@@ -10,6 +10,7 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/signin');
   const userId = (session.user as { id: string }).id;
+  const isAdmin = Boolean(process.env.ADMIN_EMAIL) && (session.user as { email?: string }).email === process.env.ADMIN_EMAIL;
 
   const funnels = await prisma.funnel.findMany({
     where: { ownerId: userId },
@@ -23,7 +24,14 @@ export default async function DashboardPage() {
         <span className="mono" style={{ fontSize: 11, letterSpacing: '0.12em', color: 'var(--line-secondary)' }}>
           FUNNEL SETUPER
         </span>
-        <SignOutButton />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {isAdmin && (
+            <Link href="/ops" className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)', textDecoration: 'none' }}>
+              Ops →
+            </Link>
+          )}
+          <SignOutButton />
+        </div>
       </div>
 
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Your funnels</h1>

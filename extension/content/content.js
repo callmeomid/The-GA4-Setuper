@@ -102,10 +102,16 @@
     'click',
     (event) => {
       if (!armed) return;
-      const path = event.composedPath ? event.composedPath() : [event.target];
-      const target = findInteractiveAncestor(path);
-      if (!target) return;
-      captureClick(target);
+      try {
+        const path = event.composedPath ? event.composedPath() : [event.target];
+        const target = findInteractiveAncestor(path);
+        if (!target) return;
+        captureClick(target);
+      } catch (e) {
+        // A click-listener exception is uncaught by the page and easy to
+        // miss in devtools — log it so a bad capture doesn't just vanish.
+        FunnelLog.error('Click capture failed', { url: location.href, error: e.message });
+      }
     },
     true,
   );
@@ -114,22 +120,26 @@
     'submit',
     (event) => {
       if (!armed) return;
-      const form = event.target;
-      if (!(form instanceof HTMLFormElement)) return;
-      const submitButton = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
-      const label = submitButton ? window.FunnelSelector.getVisibleLabel(submitButton) : 'Form submission';
-      const { selector, confidence } = window.FunnelSelector.getStableSelector(form);
-      const formFields = Array.from(form.elements)
-        .map((el) => el.name)
-        .filter(Boolean)
-        .filter((name, index, all) => all.indexOf(name) === index);
-      sendStep({
-        label: `Submitted: ${label}`,
-        urlPattern: window.FunnelUrlPattern.toUrlPattern(location.href),
-        trigger: { type: 'formSubmit', selector },
-        formFields,
-        confidence,
-      });
+      try {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        const submitButton = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+        const label = submitButton ? window.FunnelSelector.getVisibleLabel(submitButton) : 'Form submission';
+        const { selector, confidence } = window.FunnelSelector.getStableSelector(form);
+        const formFields = Array.from(form.elements)
+          .map((el) => el.name)
+          .filter(Boolean)
+          .filter((name, index, all) => all.indexOf(name) === index);
+        sendStep({
+          label: `Submitted: ${label}`,
+          urlPattern: window.FunnelUrlPattern.toUrlPattern(location.href),
+          trigger: { type: 'formSubmit', selector },
+          formFields,
+          confidence,
+        });
+      } catch (e) {
+        FunnelLog.error('Form submit capture failed', { url: location.href, error: e.message });
+      }
     },
     true,
   );

@@ -24,6 +24,8 @@ type PushResult = {
   results: { stepId: string; label: string; trigger: string; tag: string; error?: string }[];
   ga4ConfigTagName: string;
   workspaceUrl: string;
+  runId: string;
+  outcome: 'success' | 'partial' | 'failed';
 };
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
@@ -47,6 +49,9 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
   const [pushing, setPushing] = useState(false);
   const [pushResult, setPushResult] = useState<PushResult | null>(null);
   const [pushError, setPushError] = useState('');
+  const [rollingBack, setRollingBack] = useState(false);
+  const [rollbackError, setRollbackError] = useState('');
+  const [rolledBack, setRolledBack] = useState(false);
 
   useEffect(() => {
     fetch(`/api/funnels/${params.id}/gtm-plan`)
@@ -77,6 +82,21 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
       setPushError('Push failed — network error.');
     } finally {
       setPushing(false);
+    }
+  }
+
+  async function rollback() {
+    setRollingBack(true);
+    setRollbackError('');
+    try {
+      const res = await fetch(`/api/funnels/${params.id}/gtm-rollback`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) setRollbackError(data.error ?? 'Rollback failed.');
+      else setRolledBack(true);
+    } catch {
+      setRollbackError('Rollback failed — network error.');
+    } finally {
+      setRollingBack(false);
     }
   }
 
@@ -231,14 +251,43 @@ export default function GtmSetupPage({ params }: { params: { id: string } }) {
               {r.error && <span style={{ fontSize: 11, color: 'var(--danger)' }}>{r.error}</span>}
             </div>
           ))}
-          <div style={{ border: '1px solid var(--accent)', borderRadius: 2, padding: 14, marginTop: 8 }}>
-            <p style={{ fontSize: 13, color: 'var(--accent)', margin: '0 0 8px' }}>
-              ✓ Draft written to your workspace. Nothing has been published.
-            </p>
-            <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              Open Google Tag Manager to review &amp; publish →
-            </a>
-          </div>
+
+          {rolledBack ? (
+            <div style={{ border: '1px solid var(--line-secondary)', borderRadius: 2, padding: 14, marginTop: 8, fontSize: 13, color: 'var(--line-secondary)' }}>
+              Workspace deleted. This funnel is back to a clean slate — pushing again will start from scratch.
+            </div>
+          ) : pushResult.outcome === 'success' ? (
+            <div style={{ border: '1px solid var(--accent)', borderRadius: 2, padding: 14, marginTop: 8 }}>
+              <p style={{ fontSize: 13, color: 'var(--accent)', margin: '0 0 8px' }}>
+                ✓ Draft written to your workspace. Nothing has been published.
+              </p>
+              <a href={pushResult.workspaceUrl} target="_blank" rel="noreferrer" className="btn btn-accent" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                Open Google Tag Manager to review &amp; publish →
+              </a>
+            </div>
+          ) : (
+            <div style={{ border: '1px solid var(--danger)', borderRadius: 2, padding: 14, marginTop: 8 }}>
+              <p style={{ fontSize: 13, color: 'var(--danger)', margin: '0 0 8px' }}>
+                {pushResult.outcome === 'partial'
+                  ? '⚠ Partially wired — some steps landed in the workspace, some didn\'t. Do not publish this workspace as-is.'
+                  : '✕ Nothing landed in the workspace. Safe to just retry.'}
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-accent" disabled={pushing} onClick={push}>
+                  {pushing ? 'Retrying…' : 'Retry (reuses what already succeeded)'}
+                </button>
+                {pushResult.outcome === 'partial' && (
+                  <button className="btn" disabled={rollingBack} onClick={rollback} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>
+                    {rollingBack ? 'Rolling back…' : 'Roll back (delete this draft workspace)'}
+                  </button>
+                )}
+              </div>
+              {rollbackError && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 8 }}>{rollbackError}</div>}
+              <div className="mono" style={{ fontSize: 10, color: 'var(--line-secondary)', marginTop: 10 }}>
+                run {pushResult.runId}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </main>

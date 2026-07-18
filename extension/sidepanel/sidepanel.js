@@ -170,16 +170,33 @@ function showRecorderView() {
   document.getElementById('recorder-view').classList.remove('hidden');
 }
 
+function backendOriginOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function sendFunnelSpec(url, spec) {
   if (!url) return { ok: false, error: 'Enter a backend URL first' };
+  const backendOrigin = backendOriginOf(url);
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(spec),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      FunnelLog.error('Send to backend rejected', { backendOrigin, status: res.status, body: body.slice(0, 500) });
+    }
     return { ok: res.ok, status: res.status };
   } catch (e) {
+    // Forwarding to the same origin that just failed is a no-op most of the
+    // time (network/DNS down) — harmless since it's fire-and-forget, and it's
+    // the one case that *does* succeed (e.g. a 4xx we mishandled as a throw).
+    FunnelLog.error('Send to backend failed', { backendOrigin, error: e.message });
     return { ok: false, error: e.message };
   }
 }

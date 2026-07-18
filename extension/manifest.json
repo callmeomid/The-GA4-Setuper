@@ -17,7 +17,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["lib/selector.js", "lib/url-pattern.js", "content/content.js"],
+      "js": ["lib/log.js", "lib/selector.js", "lib/url-pattern.js", "content/content.js"],
       "run_at": "document_start",
       "all_frames": false
     }

@@ -1,9 +1,11 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
+import { GtmError } from '@/lib/gtm/client';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
+import { logError } from '@/lib/log';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -57,6 +59,11 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     return NextResponse.json({ plan, technicalSteps, ga4ConfigResource });
   } catch (err) {
     if (err instanceof SetupError) return NextResponse.json({ error: err.message }, { status: err.status });
+    // GtmError is already logged with full request/response context inside
+    // callGtmLogged — logging it again here would just duplicate the Sentry
+    // event. Anything else reaching this catch is a genuine unhandled bug
+    // (not a translated API error), so that's the case worth reporting here.
+    if (!(err instanceof GtmError)) logError('gtm-plan failed unexpectedly', err, { userId, funnelId: params.id });
     const plainEnglish = (err as { plainEnglish?: string }).plainEnglish;
     const message = plainEnglish ?? (err instanceof Error ? err.message : 'Unknown error');
     return NextResponse.json({ error: message }, { status: 502 });

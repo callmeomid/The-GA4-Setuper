@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { exchangeGtmCode } from '@/lib/gtm/oauth';
+import { logError } from '@/lib/log';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
   let tokens;
   try {
     tokens = await exchangeGtmCode(code);
-  } catch {
+  } catch (err) {
+    logError('GTM OAuth token exchange failed', err, { userId, provider: 'gtm' });
     return NextResponse.redirect(new URL('/settings?gtmError=token_exchange_failed', base));
   }
 

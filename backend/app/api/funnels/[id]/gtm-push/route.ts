@@ -1,10 +1,13 @@
+import crypto from 'crypto';
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { createTag, createTrigger } from '@/lib/gtm/api';
+import { GtmError } from '@/lib/gtm/client';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
 import { loadFunnelForGtm, loadGtmConnection, prepareWorkspaceAndSnapshot, SetupError } from '@/lib/gtm/setup';
+import { logError, logWarn } from '@/lib/log';
 import { prisma } from '@/lib/prisma';
 
 type StepResult = {
@@ -15,17 +18,27 @@ type StepResult = {
   error?: string;
 };
 
+// Threads one runId through every GTM API call made during this execution
+// (IntegrationApiLog.runId) and into one PushAttempt row recording how it
+// ended — that pairing is what lets the ops dashboard show "this funnel is
+// stuck partial" and the rollback route show "here's exactly what this run
+// touched" instead of re-deriving both from timestamps.
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+  const runId = crypto.randomUUID();
+  const startedAt = new Date();
 
   const body = await request.json().catch(() => ({}));
   const overrideMeasurementId: string | undefined = body?.ga4MeasurementId;
   const eventNameOverrides: Record<string, string> = body?.eventNameOverrides ?? {};
 
+  let funnelId: string | null = null;
+
   try {
     const funnel = await loadFunnelForGtm(userId, params.id);
+    funnelId = funnel.id;
     const connection = await loadGtmConnection(userId);
 
     if (overrideMeasurementId) {
@@ -39,8 +52,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       if (step) step.ga4EventName = eventName;
     }
 
-    const ctx = { userId, funnelId: funnel.id };
-    const { workspacePath, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection);
+    const ctx = { userId, funnelId: funnel.id, runId };
+    const { workspacePath, snapshot } = await prepareWorkspaceAndSnapshot(userId, funnel.id, funnel.name, connection, runId);
 
     const plan = buildFunnelPlan(
       funnel.name,
@@ -152,11 +165,66 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ? `https://tagmanager.google.com/#/container/accounts/${connection.gtmAccountId}/containers/${connection.gtmContainerId}/workspaces/${funnel.gtmWorkspaceId}`
       : 'https://tagmanager.google.com/';
 
-    return NextResponse.json({ results, ga4ConfigTagName, workspaceUrl });
+    const stepsTotal = results.length;
+    const stepsError = results.filter((r) => r.trigger === 'error' || r.tag === 'error').length;
+    const stepsOk = stepsTotal - stepsError;
+    // "partial" is the state this whole logging/rollback effort exists for:
+    // the workspace now has some steps wired and some missing, which is
+    // fine as a draft but actively dangerous if anyone publishes it as-is.
+    const outcome = stepsError === 0 ? 'success' : stepsOk === 0 ? 'failed' : 'partial';
+    const errorSummary = stepsError > 0
+      ? results.filter((r) => r.error).map((r) => `${r.label}: ${r.error}`).join('; ').slice(0, 1000)
+      : null;
+
+    await prisma.pushAttempt.create({
+      data: { runId, funnelId: funnel.id, userId, outcome, stepsTotal, stepsOk, stepsError, errorSummary, startedAt, finishedAt: new Date() },
+    });
+
+    if (outcome === 'partial') {
+      logError(`GTM push left funnel "${funnel.name}" partially wired`, new Error(errorSummary ?? 'partial push'), {
+        tags: { push_outcome: 'partial' },
+        funnelId: funnel.id,
+        runId,
+        stepsOk,
+        stepsError,
+        workspaceUrl,
+      });
+    } else if (outcome === 'failed') {
+      // Every step errored, but nothing after step 1 landed cleanly either —
+      // annoying, not dangerous (see push_outcome:partial above), so warn
+      // rather than page.
+      logWarn(`GTM push failed for funnel "${funnel.name}" — no steps completed`, {
+        tags: { push_outcome: 'failed' },
+        funnelId: funnel.id,
+        runId,
+        errorSummary,
+      });
+    }
+
+    return NextResponse.json({ results, ga4ConfigTagName, workspaceUrl, runId, outcome });
   } catch (err) {
+    if (funnelId) {
+      await prisma.pushAttempt.create({
+        data: {
+          runId,
+          funnelId,
+          userId,
+          outcome: 'failed',
+          stepsTotal: 0,
+          stepsOk: 0,
+          stepsError: 0,
+          errorSummary: err instanceof Error ? err.message.slice(0, 1000) : 'Unknown error',
+          startedAt,
+          finishedAt: new Date(),
+        },
+      });
+    }
     if (err instanceof SetupError) return NextResponse.json({ error: err.message }, { status: err.status });
+    // GtmError is already logged with full request/response context inside
+    // callGtmLogged — logging it again here would duplicate the Sentry event.
+    if (!(err instanceof GtmError)) logError('gtm-push failed unexpectedly', err, { userId, funnelId, runId });
     const plainEnglish = (err as { plainEnglish?: string }).plainEnglish;
     const message = plainEnglish ?? (err instanceof Error ? err.message : 'Unknown error');
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: message, runId }, { status: 502 });
   }
 }
