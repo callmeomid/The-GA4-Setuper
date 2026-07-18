@@ -1,14 +1,13 @@
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
 import { notFound, redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FlowDiagram } from '@/components/FlowDiagram';
 import { ApproveButton } from '@/components/ApproveButton';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default async function FunnelDetailPage({ params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) redirect('/signin');
   const userId = (session.user as { id: string }).id;
 

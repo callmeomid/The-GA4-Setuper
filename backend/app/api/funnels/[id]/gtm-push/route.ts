@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { createTag, createTrigger } from '@/lib/gtm/api';
 import { buildFunnelPlan } from '@/lib/gtm/plan';
 import { buildGa4ConfigTagResource, buildTagResource, buildTriggerResource } from '@/lib/gtm/resources';
@@ -16,7 +15,7 @@ type StepResult = {
 };
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
