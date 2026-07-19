@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getOrCreateStripeCustomerId } from '@/lib/billing/customer';
 import { PlanId, stripePriceIdFor } from '@/lib/billing/plans';
 import { appUrl, stripe } from '@/lib/billing/stripe';
@@ -10,7 +9,7 @@ import { appUrl, stripe } from '@/lib/billing/stripe';
 // for this path — the dedicated /billing/redeem route is only needed for
 // pre-applied voucher links.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
