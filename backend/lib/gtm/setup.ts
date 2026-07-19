@@ -6,6 +6,7 @@ import {
   listTags,
   listTriggers,
 } from './api';
+import { buildWorkspaceName } from './resources';
 import type { GtmSnapshot } from './plan';
 
 export class SetupError extends Error {
@@ -50,7 +51,7 @@ export async function prepareWorkspaceAndSnapshot(
   ga4ConfigTagName?: string | null,
 ) {
   const ctx = { userId, funnelId };
-  const workspaceName = `Funnel Setuper: ${funnelName}`;
+  const workspaceName = buildWorkspaceName(funnelName);
   const workspace = await getOrCreateWorkspace(
     ctx,
     connection.refreshToken,

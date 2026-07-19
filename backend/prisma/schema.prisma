@@ -36,6 +36,10 @@ model User {
   // Gates /admin/vouchers. Set manually (seed/DB), never via the API.
   isAdmin       Boolean   @default(false)
 
+  // Flips to true once the first-login onboarding panel is dismissed (or
+  // completed) on the dashboard — keeps it from reappearing on every visit.
+  hasSeenOnboarding Boolean @default(false)
+
   accounts      Account[]
   sessions      Session[]
   funnels       Funnel[]

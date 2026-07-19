@@ -19,6 +19,7 @@ export function GtmConnectPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!connected) return;
@@ -54,7 +55,10 @@ export function GtmConnectPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountId, containerId, containerPublicId: container?.publicId }),
     });
-    if (res.ok) setSaved(true);
+    if (res.ok) {
+      setSaved(true);
+      setEditing(false);
+    }
   }
 
   if (!connected) {
@@ -65,10 +69,23 @@ export function GtmConnectPanel({
     );
   }
 
-  if (selectedContainerName && !saved) {
+  if (selectedContainerName && !saved && !editing) {
     return (
-      <div className="mono" style={{ fontSize: 12, color: 'var(--line-secondary)' }}>
-        Connected — writing to <span style={{ color: 'var(--accent)' }}>{selectedContainerName}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="mono" style={{ fontSize: 12, color: 'var(--line-secondary)' }}>
+          Connected — writing to <span style={{ color: 'var(--accent)' }}>{selectedContainerName}</span>
+        </div>
+        <button
+          className="btn"
+          style={{ padding: '4px 10px', fontSize: 10.5 }}
+          onClick={() => {
+            setAccountId('');
+            setContainerId('');
+            setEditing(true);
+          }}
+        >
+          Change container
+        </button>
       </div>
     );
   }
@@ -108,11 +125,18 @@ export function GtmConnectPanel({
         </select>
       )}
 
-      {containerId && (
-        <button className="btn btn-accent" onClick={save}>
-          Use this container
-        </button>
-      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {containerId && (
+          <button className="btn btn-accent" onClick={save}>
+            Use this container
+          </button>
+        )}
+        {selectedContainerName && !saved && (
+          <button className="btn" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        )}
+      </div>
       {saved && <div style={{ fontSize: 12, color: 'var(--accent)' }}>Saved. Refresh to confirm.</div>}
     </div>
   );

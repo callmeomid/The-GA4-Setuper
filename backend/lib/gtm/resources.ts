@@ -8,6 +8,15 @@ export type StepInput = {
   label: string;
 };
 
+// Shared by plan.ts (preview) and setup.ts (actual getOrCreateWorkspace call)
+// so the name used to look up an existing workspace can never drift from the
+// name used to create one. Truncated like buildTriggerName/buildTagName below
+// — funnelName alone can run up to 200 chars (see lib/schema.ts), and GTM
+// rejects entity names past its length limit with an opaque 400.
+export function buildWorkspaceName(funnelName: string): string {
+  return `Funnel Setuper: ${funnelName}`.slice(0, 100);
+}
+
 export function triggerTypeLabel(triggerType: string): string {
   if (triggerType === 'click') return 'Click';
   if (triggerType === 'formSubmit') return 'Form Submission';

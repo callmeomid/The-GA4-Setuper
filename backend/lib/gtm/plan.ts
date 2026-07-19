@@ -1,6 +1,6 @@
 import type { tagmanager_v2 } from 'googleapis';
 import { deriveEventName } from './event-name';
-import { buildTagName, buildTriggerName, triggerTypeLabel, type StepInput } from './resources';
+import { buildTagName, buildTriggerName, buildWorkspaceName, triggerTypeLabel, type StepInput } from './resources';
 
 export type PlanOutcome = 'new' | 'reuse' | 'conflict';
 
@@ -64,7 +64,7 @@ export function buildFunnelPlan(
   providedMeasurementId: string | null,
   setupMode: SetupMode,
 ): FunnelPlan {
-  const workspaceName = `Funnel Setuper: ${funnelName}`;
+  const workspaceName = buildWorkspaceName(funnelName);
 
   const ga4Config = buildGa4ConfigPlan(snapshot, providedMeasurementId, setupMode);
 

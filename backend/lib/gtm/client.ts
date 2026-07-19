@@ -17,6 +17,18 @@ function translateError(err: unknown): GtmError {
   const status = anyErr?.response?.status ?? anyErr?.code;
   const rawMessage = anyErr?.response?.data?.error?.message ?? anyErr?.message ?? 'Unknown GTM API error';
 
+  // Free GTM accounts cap out at 3 workspaces per container (the default plus
+  // 2 more); GTM 360 has no cap. This app creates one dedicated workspace per
+  // funnel, so a marketer testing a handful of funnels hits this fast — and
+  // the raw API error is just a generic 400, so it needs its own translation
+  // or it's indistinguishable from any other validation failure.
+  if (status === 400 && /number of workspaces|workspace.*limit|too many workspaces/i.test(rawMessage)) {
+    return new GtmError(
+      rawMessage,
+      'This GTM container already has the maximum number of workspaces (3 on a free account). Delete or merge an old workspace in Tag Manager — Admin → Workspaces — then try again, or upgrade to GTM 360 for unlimited workspaces.',
+      400,
+    );
+  }
   if (status === 403) {
     return new GtmError(
       rawMessage,

@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FlowDiagram } from '@/components/FlowDiagram';
 import { ApproveButton } from '@/components/ApproveButton';
+import { DeleteFunnelButton } from '@/components/DeleteFunnelButton';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default async function FunnelDetailPage({ params }: { params: { id: string } }) {
@@ -28,13 +29,16 @@ export default async function FunnelDetailPage({ params }: { params: { id: strin
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 16, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{funnel.name}</h1>
-        <StatusBadge status={funnel.status} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <StatusBadge status={funnel.status} />
+          <DeleteFunnelButton funnelId={funnel.id} redirectTo="/dashboard" />
+        </div>
       </div>
       <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 4, marginBottom: 8 }}>
         {funnel.steps.length} steps captured. Scan the flow below, then approve it to move to setup.
       </p>
 
-      <FlowDiagram steps={funnel.steps} approved={approved} setupMode={funnel.setupMode as 'client' | 'server' | null} />
+      <FlowDiagram funnelId={funnel.id} steps={funnel.steps} approved={approved} setupMode={funnel.setupMode as 'client' | 'server' | null} />
 
       <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14 }}>
         {approved ? (

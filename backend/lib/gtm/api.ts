@@ -29,10 +29,18 @@ export async function getOrCreateWorkspace(
   const tagmanager = getTagmanagerClient(refreshToken);
   const parent = `accounts/${accountId}/containers/${containerId}`;
 
-  const listData = await callGtmLogged(ctx, 'GET', 'workspaces.list', { parent }, () =>
-    tagmanager.accounts.containers.workspaces.list({ parent }),
-  );
-  const existing = (listData.workspace ?? []).find((w) => w.name === name);
+  // Paginated, not just a single page: missing an existing workspace here
+  // means falling through to create a duplicate, which fails outright once
+  // the container's workspace cap is hit (see translateError in ./client).
+  let existing: tagmanager_v2.Schema$Workspace | undefined;
+  let pageToken: string | undefined;
+  do {
+    const listData = await callGtmLogged(ctx, 'GET', 'workspaces.list', { parent, pageToken }, () =>
+      tagmanager.accounts.containers.workspaces.list({ parent, pageToken }),
+    );
+    existing = (listData.workspace ?? []).find((w) => w.name === name);
+    pageToken = listData.nextPageToken ?? undefined;
+  } while (!existing && pageToken);
   if (existing) return existing;
 
   return callGtmLogged(ctx, 'POST', 'workspaces.create', { parent, name }, () =>
@@ -54,12 +62,21 @@ export async function ensureBuiltInVariables(ctx: GtmCallContext, refreshToken: 
   );
 }
 
+// Conflict detection (buildFunnelPlan) walks this list to decide whether a
+// trigger name is free — a missed page here means a false "new" verdict and
+// a duplicate trigger created on push, so every page has to be fetched.
 export async function listTriggers(ctx: GtmCallContext, refreshToken: string, workspacePath: string) {
   const tagmanager = getTagmanagerClient(refreshToken);
-  const data = await callGtmLogged(ctx, 'GET', 'triggers.list', { parent: workspacePath }, () =>
-    tagmanager.accounts.containers.workspaces.triggers.list({ parent: workspacePath }),
-  );
-  return data.trigger ?? [];
+  const triggers: tagmanager_v2.Schema$Trigger[] = [];
+  let pageToken: string | undefined;
+  do {
+    const data = await callGtmLogged(ctx, 'GET', 'triggers.list', { parent: workspacePath, pageToken }, () =>
+      tagmanager.accounts.containers.workspaces.triggers.list({ parent: workspacePath, pageToken }),
+    );
+    triggers.push(...(data.trigger ?? []));
+    pageToken = data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return triggers;
 }
 
 export async function createTrigger(
@@ -76,10 +93,16 @@ export async function createTrigger(
 
 export async function listTags(ctx: GtmCallContext, refreshToken: string, workspacePath: string) {
   const tagmanager = getTagmanagerClient(refreshToken);
-  const data = await callGtmLogged(ctx, 'GET', 'tags.list', { parent: workspacePath }, () =>
-    tagmanager.accounts.containers.workspaces.tags.list({ parent: workspacePath }),
-  );
-  return data.tag ?? [];
+  const tags: tagmanager_v2.Schema$Tag[] = [];
+  let pageToken: string | undefined;
+  do {
+    const data = await callGtmLogged(ctx, 'GET', 'tags.list', { parent: workspacePath, pageToken }, () =>
+      tagmanager.accounts.containers.workspaces.tags.list({ parent: workspacePath, pageToken }),
+    );
+    tags.push(...(data.tag ?? []));
+    pageToken = data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return tags;
 }
 
 export async function createTag(ctx: GtmCallContext, refreshToken: string, workspacePath: string, tag: tagmanager_v2.Schema$Tag) {
