@@ -13,6 +13,13 @@ async function authenticateByApiKey(request: Request) {
 export async function POST(request: Request) {
   const user = await authenticateByApiKey(request);
   if (!user) {
+    const authHeader = request.headers.get('authorization');
+    console.log(
+      '[POST /api/funnels] 401:',
+      authHeader
+        ? `Authorization header present ("Bearer <redacted>") but no user has a matching apiKey`
+        : 'no Authorization header on the request',
+    );
     return NextResponse.json({ error: 'Missing or invalid Authorization: Bearer <apiKey> header' }, { status: 401 });
   }
 

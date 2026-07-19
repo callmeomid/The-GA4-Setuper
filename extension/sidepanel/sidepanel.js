@@ -170,12 +170,16 @@ function showRecorderView() {
   document.getElementById('recorder-view').classList.remove('hidden');
 }
 
-async function sendFunnelSpec(url, spec) {
+async function sendFunnelSpec(url, apiKey, spec) {
   if (!url) return { ok: false, error: 'Enter a backend URL first' };
+  if (!apiKey) return { ok: false, error: 'Enter your API key first (Settings page on the backend)' };
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(spec),
     });
     return { ok: res.ok, status: res.status };
@@ -221,10 +225,11 @@ document.getElementById('copy-btn').addEventListener('click', async () => {
 
 document.getElementById('send-btn').addEventListener('click', async () => {
   const url = document.getElementById('backend-url').value.trim();
+  const apiKey = document.getElementById('backend-api-key').value.trim();
   const resultEl = document.getElementById('send-result');
   resultEl.className = 'send-result';
   resultEl.textContent = 'Sending…';
-  const result = await sendFunnelSpec(url, buildExportSpec());
+  const result = await sendFunnelSpec(url, apiKey, buildExportSpec());
   if (result.ok) {
     resultEl.className = 'send-result ok';
     resultEl.textContent = `Sent — server responded ${result.status}`;
