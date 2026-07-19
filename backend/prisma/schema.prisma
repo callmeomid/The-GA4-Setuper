@@ -130,8 +130,8 @@ model Funnel {
   stapeContainerStatus String  @default("pending")
   stapeCookieName      String?
 
-  // Set the first time this funnel is successfully pushed to GTM — claims a
-  // slot against the plan's funnelPushLimit (see lib/billing/limits.ts).
+  // Stamped the first time this funnel is successfully pushed to GTM — used
+  // by lib/billing/limits.ts to count a plan's funnel-push cap against.
   firstPushedAt DateTime?
 
   gtmApiLogs GtmApiLog[]
