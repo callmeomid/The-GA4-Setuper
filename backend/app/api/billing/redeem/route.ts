@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getOrCreateStripeCustomerId } from '@/lib/billing/customer';
 import { PlanId, stripePriceIdFor } from '@/lib/billing/plans';
 import { appUrl, stripe } from '@/lib/billing/stripe';
@@ -19,7 +18,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(appUrl('/settings?voucherError=' + encodeURIComponent('This link is missing or malformed.')));
   }
 
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     const callbackUrl = `/api/billing/redeem?voucher=${encodeURIComponent(code)}&plan=${plan}`;
     return NextResponse.redirect(appUrl(`/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`));

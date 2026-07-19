@@ -22,7 +22,12 @@ export default async function DashboardPage() {
         <span className="mono" style={{ fontSize: 11, letterSpacing: '0.12em', color: 'var(--line-secondary)' }}>
           FUNNEL SETUPER
         </span>
-        <SignOutButton />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <Link href="/settings" className="mono" style={{ fontSize: 11, color: 'var(--line-secondary)', textDecoration: 'none' }}>
+            Settings
+          </Link>
+          <SignOutButton />
+        </div>
       </div>
 
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Your funnels</h1>
