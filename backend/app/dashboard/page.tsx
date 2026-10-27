@@ -2,8 +2,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { DeleteFunnelButton } from '@/components/DeleteFunnelButton';
-import { OnboardingPanel } from '@/components/OnboardingPanel';
 import { SignOutButton } from '@/components/SignOutButton';
 import { StatusBadge } from '@/components/StatusBadge';
 
@@ -12,14 +10,11 @@ export default async function DashboardPage() {
   if (!session?.user) redirect('/signin');
   const userId = (session.user as { id: string }).id;
 
-  const [funnels, user] = await Promise.all([
-    prisma.funnel.findMany({
-      where: { ownerId: userId },
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { steps: true } } },
-    }),
-    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
-  ]);
+  const funnels = await prisma.funnel.findMany({
+    where: { ownerId: userId },
+    orderBy: { createdAt: 'desc' },
+    include: { _count: { select: { steps: true } } },
+  });
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '32px 20px' }}>
@@ -34,8 +29,6 @@ export default async function DashboardPage() {
           <SignOutButton />
         </div>
       </div>
-
-      {!user.hasSeenOnboarding && <OnboardingPanel apiKey={user.apiKey} />}
 
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Your funnels</h1>
       <p style={{ fontSize: 13, color: 'var(--line-secondary)', marginTop: 0, marginBottom: 24 }}>
@@ -59,21 +52,18 @@ export default async function DashboardPage() {
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {funnels.map((funnel) => (
-            <li
-              key={funnel.id}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                border: '1px solid var(--line-ghost)',
-                borderRadius: 2,
-                padding: '14px 16px',
-                gap: 12,
-              }}
-            >
+            <li key={funnel.id}>
               <Link
                 href={`/funnels/${funnel.id}`}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1, minWidth: 0, textDecoration: 'none' }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: '1px solid var(--line-ghost)',
+                  borderRadius: 2,
+                  padding: '14px 16px',
+                  textDecoration: 'none',
+                }}
               >
                 <div>
                   <div style={{ fontSize: 14, marginBottom: 4 }}>{funnel.name}</div>
@@ -83,7 +73,6 @@ export default async function DashboardPage() {
                 </div>
                 <StatusBadge status={funnel.status} />
               </Link>
-              <DeleteFunnelButton funnelId={funnel.id} />
             </li>
           ))}
         </ul>
